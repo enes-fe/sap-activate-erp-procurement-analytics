@@ -98,6 +98,8 @@ CREATE TABLE purchase_requisitions (
 CREATE TABLE purchase_requisition_items (
     pr_item_id TEXT PRIMARY KEY,
     pr_id TEXT NOT NULL,
+    pr_item_number INTEGER NOT NULL
+        CHECK (pr_item_number > 0),
     material_id TEXT NOT NULL,
     requested_quantity REAL NOT NULL
         CHECK (requested_quantity > 0),
@@ -107,6 +109,7 @@ CREATE TABLE purchase_requisition_items (
         CHECK (requested_delivery_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     pr_item_status TEXT NOT NULL
         CHECK (pr_item_status IN ('open', 'approved', 'converted', 'rejected', 'cancelled', 'partially converted')),
+    UNIQUE (pr_id, pr_item_number),
     FOREIGN KEY (pr_id)
         REFERENCES purchase_requisitions (pr_id)
         ON UPDATE CASCADE
