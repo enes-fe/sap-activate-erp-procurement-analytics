@@ -355,7 +355,7 @@ erDiagram
     materials ||--o{ purchase_order_items : ordered_as
 
     purchase_requisitions ||--o{ purchase_requisition_items : contains
-    purchase_requisition_items ||--o{ purchase_order_items : converted_into
+    purchase_requisition_items o|--o{ purchase_order_items : converted_into
     purchase_orders ||--o{ purchase_order_items : contains
     purchase_order_items ||--o{ goods_receipts : received_by
     purchase_order_items ||--o{ invoice_items : matched_by
