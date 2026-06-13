@@ -8,7 +8,7 @@ The project will simulate a company preparing or executing an SAP S/4HANA procur
 
 ## Business Problem
 
-A fictional mid-sized company wants better visibility into its procurement process during an SAP S/4HANA implementation or improvement initiative.
+Marmara Components, a fictional mid-sized manufacturing and industrial components distribution company, wants better visibility into its procurement process during an SAP S/4HANA implementation or improvement initiative.
 
 The business needs to understand:
 

@@ -34,7 +34,7 @@ The final output should help explain how procurement data can be analyzed during
 
 ## 3. Business Scenario
 
-A fictional mid-sized company is implementing or improving its ERP procurement processes using SAP Activate.
+Marmara Components, a fictional mid-sized manufacturing and industrial components distribution company, is implementing or improving its ERP procurement processes using SAP Activate.
 
 The company wants to understand:
 
