@@ -60,27 +60,30 @@ The analytics work will connect technical outputs to SAP implementation phases, 
 
 ## Current Project Status
 
-Initial setup stage.
+The project foundation and SQLite schema are complete. Synthetic data generation is the current implementation stage.
 
 Completed so far:
 
 - Project context defined in `PROJECT_CONTEXT.md`
 - Initial folder structure created
 - Initial README draft created
+- Business case documented in `docs/business_case.md`
+- SAP Activate mapping documented in `docs/sap_activate_mapping.md`
+- KPI catalog drafted in `docs/kpi_catalog.md`
+- Procurement data model documented in `docs/data_model.md`
+- Executable SQLite database schema created and validated in `database/schema.sql`
 
 Not created yet:
 
 - Synthetic data
-- SQL database schema
+- Populated SQLite database file
 - SQL analysis queries
 - Dashboard files
 
 ## Next Steps
 
-1. Define the detailed business case in `docs/business_case.md`.
-2. Create the SAP Activate mapping document in `docs/sap_activate_mapping.md`.
-3. Draft the KPI catalog in `docs/kpi_catalog.md`.
-4. Design the procurement data model and ERD.
-5. Create the SQL schema after the data model is confirmed.
-6. Generate realistic synthetic ERP-style procurement data.
-7. Build SQL analytics queries for procurement and project KPIs.
+1. Build `scripts/generate_data.py` to generate realistic, business-consistent procurement data.
+2. Populate the SQLite database from `database/schema.sql`.
+3. Build SQL analytics queries for procurement and SAP Activate project KPIs.
+4. Validate KPI outputs against the business questions in the documentation.
+5. Prepare optional dashboard files or screenshots after SQL outputs are stable.

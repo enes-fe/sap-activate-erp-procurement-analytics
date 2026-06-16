@@ -6,7 +6,7 @@ This data model defines the planned analytical structure for the SAP Activate ER
 
 The model is designed for portfolio-ready SQL analytics, KPI calculation, and optional dashboard reporting. It does not connect to a real SAP system and it is not intended to reproduce the full SAP S/4HANA data model. Instead, it creates a realistic but manageable analytical layer around procurement transactions, supplier performance, invoice matching, open purchase order monitoring, data migration readiness, go-live readiness, and SAP Activate project tracking.
 
-The future SQL implementation will likely use SQLite or PostgreSQL. The model is documented first so that table design, synthetic data generation, SQL queries, and dashboard outputs can stay aligned with the business questions defined in the project.
+The executable SQLite schema is implemented in `database/schema.sql`. This document describes that current schema so that synthetic data generation, SQL queries, and dashboard outputs stay aligned with the business questions defined in the project.
 
 ## 2. Design Principles
 
@@ -18,7 +18,7 @@ The future SQL implementation will likely use SQLite or PostgreSQL. The model is
 | Spend at item level | `purchase_order_items` is the main spend grain because procurement value is usually analyzed at PO item, material, and category level. |
 | End-to-end process visibility | The model supports the flow from requisition to purchase order, goods receipt, invoice, and payment. |
 | Readiness tracking | Project tasks, change requests, and data quality issues are included so the analytics layer can support SAP Activate readiness questions. |
-| SQL-friendly structure | The design avoids unnecessary complexity and should be easy to implement later in SQLite or PostgreSQL. |
+| SQL-friendly structure | The design avoids unnecessary complexity and is implemented in SQLite through `database/schema.sql`. |
 | Portfolio clarity | The model should be understandable to recruiters, data analysts, SAP consultants, business analysts, and project managers. |
 
 ## 3. Entity Overview
@@ -48,158 +48,159 @@ The future SQL implementation will likely use SQLite or PostgreSQL. The model is
 
 Supplier master data for procurement analytics. This table supports vendor spend, supplier delivery performance, invoice exception analysis, and payment monitoring.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `vendor_id` | Planned primary key for the supplier. |
+| `vendor_id` | Primary key for the supplier. |
 | `vendor_name` | Supplier display name. |
 | `country` | Supplier country or region. |
 | `vendor_category` | Example categories such as raw material supplier, MRO supplier, service supplier, or logistics provider. |
 | `payment_terms` | Planned payment terms, such as Net 30 or Net 60. |
 | `preferred_vendor_flag` | Indicates whether the vendor is considered preferred for reporting and compliance analysis. |
-| `vendor_status` | Active, inactive, blocked, or pending review. |
+| `vendor_status` | Controlled value: `active`, `inactive`, `blocked`, or `pending review`. |
 | `created_date` | Date the synthetic vendor master record was created. |
 
 ### `plants`
 
 Company plant or location master data. Plants are used to analyze procurement demand, open purchase orders, delivery delays, and operational ownership by location.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `plant_id` | Planned primary key for the plant. |
+| `plant_id` | Primary key for the plant. |
 | `plant_name` | Plant or location display name. |
 | `city` | City where the plant is located. |
 | `country` | Country where the plant is located. |
-| `plant_type` | Manufacturing, distribution, service, or office location. |
-| `plant_status` | Active, inactive, or planned. |
+| `plant_type` | Controlled value: `manufacturing`, `distribution`, `service`, or `office`. |
+| `plant_status` | Controlled value: `active`, `inactive`, or `planned`. |
 
 ### `purchasing_groups`
 
 Procurement ownership group master data. This table supports analysis by buyer team, workload, purchase order cycle time, and open order follow-up.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `purchasing_group_id` | Planned primary key for the purchasing group. |
+| `purchasing_group_id` | Primary key for the purchasing group. |
 | `purchasing_group_name` | Buyer group or procurement team name. |
 | `manager_name` | Optional owner or manager for portfolio storytelling. |
-| `process_area` | Procurement area such as direct materials, indirect materials, services, or MRO. |
-| `status` | Active or inactive. |
+| `process_area` | Controlled value: `direct materials`, `indirect materials`, `services`, or `mro`. |
+| `status` | Controlled value: `active` or `inactive`. |
 
 ### `material_groups`
 
 Material group master data for procurement category analysis. Material groups are used to analyze spend by category and supplier delivery performance by procurement segment.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `material_group_id` | Planned primary key for the material group. |
+| `material_group_id` | Primary key for the material group. |
 | `material_group_name` | Category name such as raw materials, packaging, maintenance supplies, or services. |
 | `category_owner` | Optional business owner for the category. |
 | `spend_category` | Higher-level category used for dashboard grouping. |
-| `status` | Active or inactive. |
+| `status` | Controlled value: `active` or `inactive`. |
 
 ### `materials`
 
 Material or service master data used on purchase order items. Materials connect procurement spend to material groups.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `material_id` | Planned primary key for the material. |
-| `material_group_id` | Planned foreign key to `material_groups`. |
+| `material_id` | Primary key for the material. |
+| `material_group_id` | Foreign key to `material_groups`. |
 | `material_name` | Material or service description. |
 | `base_unit_of_measure` | Unit such as EA, KG, L, M, or HR. |
-| `material_type` | Example types such as raw material, spare part, packaging, service, or consumable. |
+| `material_type` | Controlled value: `raw material`, `spare part`, `packaging`, `service`, or `consumable`. |
 | `standard_price` | Optional reference price for synthetic data validation. |
-| `material_status` | Active, inactive, blocked, or under review. |
+| `material_status` | Controlled value: `active`, `inactive`, `blocked`, or `under review`. |
 
 ### `purchase_requisitions`
 
 Purchase requisition header table. It represents internal demand before procurement creates or converts it into a supplier-facing purchase order.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `pr_id` | Planned primary key for the purchase requisition header. |
-| `plant_id` | Planned foreign key to `plants`. |
+| `pr_id` | Primary key for the purchase requisition header. |
+| `plant_id` | Foreign key to `plants`. |
 | `requester_name` | Person or department requesting the purchase. |
 | `requisition_date` | Date the requisition was created. |
 | `approval_date` | Date the requisition was approved, if applicable. |
-| `pr_status` | Draft, submitted, approved, rejected, converted, or cancelled. |
+| `pr_status` | Controlled value: `draft`, `submitted`, `approved`, `rejected`, `converted`, or `cancelled`. |
 | `business_reason` | Short reason for the request. |
 
 ### `purchase_requisition_items`
 
 Purchase requisition item table. It stores the line-level requested material, quantity, and requested delivery information. PR-to-PO conversion is represented from the `purchase_order_items` side through the optional `pr_item_id` field.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `pr_item_id` | Planned primary key for the purchase requisition item. |
-| `pr_id` | Planned foreign key to `purchase_requisitions`. |
-| `material_id` | Planned foreign key to `materials`. |
+| `pr_item_id` | Primary key for the purchase requisition item. |
+| `pr_id` | Foreign key to `purchase_requisitions`. |
+| `pr_item_number` | Line number within the purchase requisition; unique together with `pr_id`. |
+| `material_id` | Foreign key to `materials`. |
 | `requested_quantity` | Requested quantity. |
 | `requested_unit_price` | Estimated or expected unit price at requisition stage. |
 | `requested_delivery_date` | Date requested by the business. |
-| `pr_item_status` | Open, approved, converted, rejected, cancelled, or partially converted. |
+| `pr_item_status` | Controlled value: `open`, `approved`, `converted`, `rejected`, `cancelled`, or `partially converted`. |
 
 ### `purchase_orders`
 
 Purchase order header table. It represents supplier-facing purchasing documents and connects vendors, plants, and purchasing groups.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `po_id` | Planned primary key for the purchase order header. |
-| `vendor_id` | Planned foreign key to `vendors`. |
-| `plant_id` | Planned foreign key to `plants`. |
-| `purchasing_group_id` | Planned foreign key to `purchasing_groups`. |
+| `po_id` | Primary key for the purchase order header. |
+| `vendor_id` | Foreign key to `vendors`. |
+| `plant_id` | Foreign key to `plants`. |
+| `purchasing_group_id` | Foreign key to `purchasing_groups`. |
 | `po_number` | Human-readable synthetic purchase order number. |
 | `po_created_date` | Date the purchase order was created. |
 | `po_approval_date` | Date the purchase order was approved or released. |
 | `document_currency` | Currency used for the purchase order. |
-| `po_status` | Open, partially received, fully received, invoiced, closed, blocked, or cancelled. |
+| `po_status` | Controlled value: `open`, `partially received`, `fully received`, `invoiced`, `closed`, `blocked`, or `cancelled`. |
 
 ### `purchase_order_items`
 
 Purchase order item table and the main analytical spend grain. This table is the primary source for procurement spend KPIs because item-level records connect value, quantity, material, delivery expectation, and header-level supplier context.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `po_item_id` | Planned primary key for the purchase order item. |
-| `po_id` | Planned foreign key to `purchase_orders`. |
-| `material_id` | Planned foreign key to `materials`. |
-| `pr_item_id` | Optional nullable planned foreign key to `purchase_requisition_items`; remains null when the PO item was created directly without a requisition. |
+| `po_item_id` | Primary key for the purchase order item. |
+| `po_id` | Foreign key to `purchase_orders`. |
+| `material_id` | Foreign key to `materials`. |
+| `pr_item_id` | Optional nullable foreign key to `purchase_requisition_items`; remains null when the PO item was created directly without a requisition. |
 | `po_item_number` | Line number within the purchase order. |
 | `ordered_quantity` | Ordered quantity. |
 | `unit_price` | Purchase order unit price. |
 | `net_value` | Item-level spend value, normally `ordered_quantity * unit_price` before taxes or adjustments. |
 | `planned_delivery_date` | Expected delivery date for delivery performance KPIs. |
-| `po_item_status` | Open, partially received, fully received, partially invoiced, fully invoiced, closed, or cancelled. |
+| `po_item_status` | Controlled value: `open`, `partially received`, `fully received`, `partially invoiced`, `fully invoiced`, `closed`, or `cancelled`. |
 
 ### `goods_receipts`
 
 Goods receipt transaction table. It records delivery events against purchase order items and supports on-time delivery, delivery delay, and open purchase order analysis.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `goods_receipt_id` | Planned primary key for the goods receipt event. |
-| `po_item_id` | Planned foreign key to `purchase_order_items`. |
+| `goods_receipt_id` | Primary key for the goods receipt event. |
+| `po_item_id` | Foreign key to `purchase_order_items`. |
 | `receipt_number` | Human-readable synthetic goods receipt number. |
 | `receipt_date` | Date goods or services were received. |
 | `received_quantity` | Quantity received in the event. |
 | `accepted_quantity` | Quantity accepted after inspection or validation. |
 | `rejected_quantity` | Quantity rejected or returned, if any. |
-| `receipt_status` | Posted, reversed, partial, accepted, rejected, or under review. |
+| `receipt_status` | Controlled value: `posted`, `reversed`, `partial`, `accepted`, `rejected`, or `under review`. |
 
 ### `invoices`
 
 Supplier invoice header table. It supports blocked invoice counts, invoice processing visibility, and payment monitoring.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `invoice_id` | Planned primary key for the invoice header. |
-| `vendor_id` | Planned foreign key to `vendors`. |
+| `invoice_id` | Primary key for the invoice header. |
+| `vendor_id` | Foreign key to `vendors`. |
 | `invoice_number` | Human-readable synthetic supplier invoice number. |
 | `invoice_date` | Date printed or issued on the supplier invoice. |
 | `invoice_received_date` | Date the invoice was received by Marmara Components. |
 | `posting_date` | Date the invoice was posted for reporting. |
 | `invoice_total_amount` | Total invoice amount. |
-| `invoice_status` | Received, posted, blocked, disputed, approved, paid, or cancelled. |
+| `invoice_status` | Controlled value: `received`, `posted`, `blocked`, `disputed`, `approved`, `paid`, or `cancelled`. |
 | `blocked_flag` | Indicates whether the invoice is blocked for payment or review. |
 | `block_reason` | Optional reason such as price variance, quantity variance, missing goods receipt, or duplicate invoice. |
 
@@ -207,47 +208,47 @@ Supplier invoice header table. It supports blocked invoice counts, invoice proce
 
 Supplier invoice item table. It connects invoice lines to purchase order items for goods receipt vs invoice matching analysis.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `invoice_item_id` | Planned primary key for the invoice item. |
-| `invoice_id` | Planned foreign key to `invoices`. |
-| `po_item_id` | Planned foreign key to `purchase_order_items`. |
+| `invoice_item_id` | Primary key for the invoice item. |
+| `invoice_id` | Foreign key to `invoices`. |
+| `po_item_id` | Foreign key to `purchase_order_items`. |
 | `invoiced_quantity` | Quantity invoiced by the supplier. |
 | `invoiced_unit_price` | Unit price on the invoice line. |
 | `invoiced_amount` | Invoice line amount. |
 | `quantity_variance` | Difference between invoiced quantity and expected or received quantity. |
 | `price_variance` | Difference between invoice price and purchase order price. |
-| `matching_status` | Matched, quantity mismatch, price mismatch, missing goods receipt, blocked, or under review. |
+| `matching_status` | Controlled value: `matched`, `quantity mismatch`, `price mismatch`, `missing goods receipt`, `blocked`, or `under review`. |
 
 ### `payments`
 
 Payment transaction table. It links payments to invoices and supports payment status, paid invoice tracking, and payment timing analysis.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `payment_id` | Planned primary key for the payment record. |
-| `invoice_id` | Planned foreign key to `invoices`. |
+| `payment_id` | Primary key for the payment record. |
+| `invoice_id` | Foreign key to `invoices`. |
 | `payment_date` | Date the invoice was paid. |
 | `payment_amount` | Amount paid. |
-| `payment_method` | Bank transfer, check, card, or other synthetic method. |
-| `payment_status` | Scheduled, paid, partially paid, failed, cancelled, or on hold. |
+| `payment_method` | Controlled value: `bank transfer`, `check`, `card`, or `other`. |
+| `payment_status` | Controlled value: `scheduled`, `paid`, `partially paid`, `failed`, `cancelled`, or `on hold`. |
 | `clearing_reference` | Optional synthetic payment or clearing reference. |
 
 ### `sap_activate_project_tasks`
 
 Project tracking table for SAP Activate readiness analytics. It stores phase, status, completion, and readiness weighting so the model can support go-live readiness scoring.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `task_id` | Planned primary key for the project task. |
-| `activate_phase` | Discover, Prepare, Explore, Realize, Deploy, or Run. |
+| `task_id` | Primary key for the project task. |
+| `activate_phase` | Controlled value: `discover`, `prepare`, `explore`, `realize`, `deploy`, or `run`. |
 | `workstream` | Workstream such as Procurement, Data Migration, Testing, Training, Cutover, or Reporting. |
 | `task_name` | Short task description. |
 | `task_owner` | Responsible role or person. |
 | `planned_start_date` | Planned start date. |
 | `planned_finish_date` | Planned finish date. |
 | `actual_finish_date` | Actual completion date, if completed. |
-| `task_status` | Not started, in progress, blocked, completed, delayed, or cancelled. |
+| `task_status` | Controlled value: `not started`, `in progress`, `blocked`, `completed`, `delayed`, or `cancelled`. |
 | `readiness_weight` | Numeric weight used for go-live readiness scoring. |
 | `completion_percent` | Completion percentage from 0 to 100. |
 | `critical_flag` | Indicates whether the task is critical for go-live readiness. |
@@ -256,15 +257,15 @@ Project tracking table for SAP Activate readiness analytics. It stores phase, st
 
 Project scope and requirement change tracking table. It supports analysis of scope pressure, approval status, and unresolved project changes by SAP Activate phase.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `change_request_id` | Planned primary key for the change request. |
-| `related_task_id` | Optional planned foreign key to `sap_activate_project_tasks`. |
-| `activate_phase` | SAP Activate phase where the change was raised. |
+| `change_request_id` | Primary key for the change request. |
+| `related_task_id` | Optional foreign key to `sap_activate_project_tasks`. |
+| `activate_phase` | Controlled value: `discover`, `prepare`, `explore`, `realize`, `deploy`, or `run`. |
 | `change_title` | Short name of the change request. |
-| `change_type` | Scope, requirement, process, data, reporting, integration, or training change. |
-| `priority` | Low, medium, high, or critical. |
-| `status` | Submitted, under review, approved, rejected, deferred, implemented, or cancelled. |
+| `change_type` | Controlled value: `scope`, `requirement`, `process`, `data`, `reporting`, `integration`, or `training`. |
+| `priority` | Controlled value: `low`, `medium`, `high`, or `critical`. |
+| `status` | Controlled value: `submitted`, `under review`, `approved`, `rejected`, `deferred`, `implemented`, or `cancelled`. |
 | `requested_date` | Date the change was requested. |
 | `decision_date` | Date the change was approved, rejected, or deferred. |
 | `business_impact` | Short description of expected impact. |
@@ -273,23 +274,23 @@ Project scope and requirement change tracking table. It supports analysis of sco
 
 Data quality and migration readiness tracking table. It supports data migration readiness, master data completeness, and go-live readiness analytics.
 
-| Planned Column | Description |
+| Column | Description |
 | --- | --- |
-| `data_quality_issue_id` | Planned primary key for the issue. |
-| `related_task_id` | Optional planned foreign key to `sap_activate_project_tasks`. |
+| `data_quality_issue_id` | Primary key for the issue. |
+| `related_task_id` | Optional foreign key to `sap_activate_project_tasks`. |
 | `affected_entity_type` | Table or domain affected, such as vendor, material, purchase order, invoice, or project task. |
 | `affected_entity_id` | Optional identifier for the affected synthetic record. |
-| `issue_category` | Missing value, duplicate, invalid reference, inconsistent status, pricing issue, or migration mapping issue. |
-| `severity` | Low, medium, high, or critical. |
-| `issue_status` | Open, in progress, resolved, accepted risk, or cancelled. |
+| `issue_category` | Controlled value: `missing value`, `duplicate`, `invalid reference`, `inconsistent status`, `pricing issue`, or `migration mapping issue`. |
+| `severity` | Controlled value: `low`, `medium`, `high`, or `critical`. |
+| `issue_status` | Controlled value: `open`, `in progress`, `resolved`, `accepted risk`, or `cancelled`. |
 | `detected_date` | Date the issue was found. |
 | `resolved_date` | Date the issue was resolved, if applicable. |
 | `migration_relevant_flag` | Indicates whether the issue affects migration readiness. |
 | `readiness_impact_score` | Numeric impact used for data migration readiness scoring. |
 
-## 5. Planned Primary Keys and Foreign Keys
+## 5. Primary Keys and Foreign Keys
 
-| Table | Planned Primary Key | Planned Foreign Keys |
+| Table | Primary Key | Foreign Keys |
 | --- | --- | --- |
 | `vendors` | `vendor_id` | None |
 | `plants` | `plant_id` | None |
@@ -308,9 +309,33 @@ Data quality and migration readiness tracking table. It supports data migration 
 | `change_requests` | `change_request_id` | Optional `related_task_id` -> `sap_activate_project_tasks.task_id` |
 | `data_quality_issues` | `data_quality_issue_id` | Optional `related_task_id` -> `sap_activate_project_tasks.task_id`; flexible `affected_entity_type` and `affected_entity_id` reference business records for analysis |
 
-## 6. Grain of Important Transaction Tables
+## 6. Unique Constraints and Delete Behavior
 
-| Table | Planned Grain | Why the Grain Matters |
+### Composite and Business Unique Constraints
+
+| Table | Unique Constraint | Business Rule |
+| --- | --- | --- |
+| `purchase_requisition_items` | `UNIQUE (pr_id, pr_item_number)` | A purchase requisition cannot contain duplicate line numbers. |
+| `purchase_orders` | `po_number` is unique | Each synthetic purchase order number represents one PO header. |
+| `purchase_order_items` | `UNIQUE (po_id, po_item_number)` | A purchase order cannot contain duplicate line numbers. |
+| `goods_receipts` | `receipt_number` is unique | Each synthetic goods receipt number represents one receipt event. |
+| `invoices` | `UNIQUE (vendor_id, invoice_number)` | The same vendor cannot have duplicate invoice numbers. Different vendors may use the same invoice number. |
+
+### Delete Behavior
+
+The current SQLite schema uses `ON UPDATE CASCADE` on foreign keys so identifier changes propagate through dependent records.
+
+Required procurement, finance, and master-data relationships use `ON DELETE RESTRICT`. This prevents deleting parent records while dependent business records still exist. Examples include vendor-to-purchase-order, plant-to-purchase-order, purchase-order-to-item, purchase-order-item-to-goods-receipt, invoice-to-invoice-item, and invoice-to-payment relationships.
+
+Optional references use `ON DELETE SET NULL`:
+
+- `purchase_order_items.pr_item_id` is set to null if the referenced requisition item is deleted. The PO item remains; only the PR-item link is removed. Converted PR items should normally be retained for business traceability.
+- `change_requests.related_task_id` is set to null if the referenced SAP Activate task is deleted.
+- `data_quality_issues.related_task_id` is set to null if the referenced SAP Activate task is deleted.
+
+## 7. Grain of Important Transaction Tables
+
+| Table | Grain | Why the Grain Matters |
 | --- | --- | --- |
 | `purchase_requisitions` | One row per purchase requisition header. | Supports requisition status, approval timing, and demand ownership. |
 | `purchase_requisition_items` | One row per requisition line item. | Supports requested material, quantity, and later conversion analysis. |
@@ -324,7 +349,7 @@ Data quality and migration readiness tracking table. It supports data migration 
 | `change_requests` | One row per project change request. | Supports scope change counts, approval status, and phase-level change pressure. |
 | `data_quality_issues` | One row per data quality or migration readiness issue. | Supports issue counts, resolution progress, data migration readiness, and readiness impact analysis. |
 
-## 7. Relationship Explanation
+## 8. Relationship Explanation
 
 The model follows a simplified procure-to-pay analytical flow.
 
@@ -342,7 +367,7 @@ Materials connect to material groups through `materials.material_group_id`. This
 
 SAP Activate tracking is separated from procurement transactions but supports readiness analytics. `sap_activate_project_tasks` tracks tasks by phase, status, readiness weight, and completion percentage. `change_requests` records project scope changes, and `data_quality_issues` records master data or transaction data issues that may affect data migration and go-live readiness.
 
-## 8. Mermaid ERD Diagram
+## 9. Mermaid ERD Diagram
 
 ```mermaid
 erDiagram
@@ -412,6 +437,7 @@ erDiagram
     purchase_requisition_items {
         string pr_item_id PK
         string pr_id FK
+        int pr_item_number
         string material_id FK
         decimal requested_quantity
         date requested_delivery_date
@@ -502,7 +528,7 @@ erDiagram
     }
 ```
 
-## 9. KPI Group to Source Table Mapping
+## 10. KPI Group to Source Table Mapping
 
 | KPI Group | Core KPI | Primary Source Tables | Notes |
 | --- | --- | --- | --- |
@@ -518,14 +544,14 @@ erDiagram
 | SAP Activate Readiness | Data Migration Readiness | `data_quality_issues`, `vendors`, `materials`, `purchase_orders` | Use issue severity, resolution status, migration relevance, and master data completeness checks. |
 | SAP Activate Readiness | Go-Live Readiness Score | `sap_activate_project_tasks`, `change_requests`, `data_quality_issues` | Combine weighted task completion, critical open changes, unresolved data issues, and readiness weights. |
 
-## 10. Notes for Future SQL Schema
+## 11. Notes for Current SQL Schema and Future Data Generation
 
-- The first SQL version should stay simple and readable. SQLite is suitable for a lightweight portfolio version, while PostgreSQL is better if the project later needs stronger typing, date functions, views, or dashboard integration.
+- The current SQL version is implemented in `database/schema.sql` and is intentionally simple and readable for a lightweight SQLite portfolio version.
 - `purchase_order_items.net_value` should be stored or calculated consistently because it is the main source for spend KPIs.
 - Header and item tables should use stable synthetic identifiers, such as `po_id` and `po_item_id`, instead of relying only on document numbers.
 - Date fields should use a consistent format, preferably ISO date format (`YYYY-MM-DD`) for SQLite compatibility.
-- Status fields should use controlled values so KPI filters are consistent across SQL queries and dashboard outputs.
+- Status and enum fields must use the exact lowercase controlled values defined in `database/schema.sql` so KPI filters are consistent across SQL queries and dashboard outputs.
 - The optional requisition-to-PO conversion relationship should be implemented carefully. Some PO items may have a `pr_item_id`, while direct purchases may leave it null.
 - Goods receipt and invoice matching should allow partial receipts and partial invoices. This is important for realistic mismatch and open PO analysis.
 - `data_quality_issues` should support flexible issue references through `affected_entity_type` and `affected_entity_id`, because data quality issues can affect many different domains.
-- Future SQL scripts should be created only after this data model is confirmed. Planned next steps are a schema file, synthetic data generation, and KPI query scripts.
+- The next implementation steps are synthetic data generation and KPI query scripts that respect the executable schema.
