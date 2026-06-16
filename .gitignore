@@ -1,0 +1,8 @@
+# Python caches
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Generated SQLite databases
+database/*.db
+database/*.db-*
