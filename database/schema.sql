@@ -1,5 +1,8 @@
 PRAGMA foreign_keys = ON;
 
+DROP VIEW IF EXISTS vw_po_fulfillment;
+DROP VIEW IF EXISTS vw_po_item_fulfillment;
+
 DROP TABLE IF EXISTS data_quality_issues;
 DROP TABLE IF EXISTS change_requests;
 DROP TABLE IF EXISTS payments;
@@ -132,8 +135,8 @@ CREATE TABLE purchase_orders (
         CHECK (po_approval_date IS NULL OR po_approval_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     document_currency TEXT NOT NULL
         CHECK (length(document_currency) = 3),
-    po_status TEXT NOT NULL
-        CHECK (po_status IN ('open', 'partially received', 'fully received', 'invoiced', 'closed', 'blocked', 'cancelled')),
+    po_lifecycle_status TEXT NOT NULL
+        CHECK (po_lifecycle_status IN ('active', 'blocked', 'cancelled', 'closed')),
     FOREIGN KEY (vendor_id)
         REFERENCES vendors (vendor_id)
         ON UPDATE CASCADE
@@ -163,8 +166,8 @@ CREATE TABLE purchase_order_items (
         CHECK (net_value >= 0),
     planned_delivery_date TEXT NOT NULL
         CHECK (planned_delivery_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-    po_item_status TEXT NOT NULL
-        CHECK (po_item_status IN ('open', 'partially received', 'fully received', 'partially invoiced', 'fully invoiced', 'closed', 'cancelled')),
+    po_item_lifecycle_status TEXT NOT NULL
+        CHECK (po_item_lifecycle_status IN ('active', 'cancelled', 'closed')),
     UNIQUE (po_id, po_item_number),
     FOREIGN KEY (po_id)
         REFERENCES purchase_orders (po_id)
@@ -193,8 +196,18 @@ CREATE TABLE goods_receipts (
     rejected_quantity REAL NOT NULL DEFAULT 0
         CHECK (rejected_quantity >= 0),
     receipt_status TEXT NOT NULL
-        CHECK (receipt_status IN ('posted', 'reversed', 'partial', 'accepted', 'rejected', 'under review')),
-    CHECK (accepted_quantity + rejected_quantity <= received_quantity),
+        CHECK (receipt_status IN ('posted', 'under review', 'reversed')),
+    CHECK (
+        (
+            receipt_status IN ('posted', 'reversed')
+            AND ABS(received_quantity - accepted_quantity - rejected_quantity) < 0.000001
+        )
+        OR (
+            receipt_status = 'under review'
+            AND accepted_quantity = 0
+            AND rejected_quantity = 0
+        )
+    ),
     FOREIGN KEY (po_item_id)
         REFERENCES purchase_order_items (po_item_id)
         ON UPDATE CASCADE
@@ -337,3 +350,134 @@ CREATE TABLE data_quality_issues (
         ON UPDATE CASCADE
         ON DELETE SET NULL
 );
+
+CREATE VIEW vw_po_item_fulfillment AS
+WITH receipt_totals AS (
+    SELECT
+        po_item_id,
+        SUM(
+            CASE
+                WHEN receipt_status <> 'reversed' THEN received_quantity
+                ELSE 0
+            END
+        ) AS total_received_quantity,
+        SUM(
+            CASE
+                WHEN receipt_status = 'posted' THEN accepted_quantity
+                ELSE 0
+            END
+        ) AS total_accepted_quantity,
+        SUM(
+            CASE
+                WHEN receipt_status = 'posted' THEN rejected_quantity
+                ELSE 0
+            END
+        ) AS total_rejected_quantity,
+        SUM(
+            CASE
+                WHEN receipt_status = 'under review' THEN received_quantity
+                ELSE 0
+            END
+        ) AS total_under_review_quantity
+    FROM goods_receipts
+    GROUP BY po_item_id
+),
+item_totals AS (
+    SELECT
+        poi.po_item_id,
+        po.po_id,
+        poi.po_item_number,
+        po.po_lifecycle_status,
+        poi.po_item_lifecycle_status,
+        poi.ordered_quantity,
+        COALESCE(rt.total_received_quantity, 0) AS total_received_quantity,
+        COALESCE(rt.total_accepted_quantity, 0) AS total_accepted_quantity,
+        COALESCE(rt.total_rejected_quantity, 0) AS total_rejected_quantity,
+        COALESCE(rt.total_under_review_quantity, 0) AS total_under_review_quantity
+    FROM purchase_order_items AS poi
+    JOIN purchase_orders AS po
+        ON po.po_id = poi.po_id
+    LEFT JOIN receipt_totals AS rt
+        ON rt.po_item_id = poi.po_item_id
+)
+SELECT
+    po_item_id,
+    po_id,
+    po_item_number,
+    po_lifecycle_status,
+    po_item_lifecycle_status,
+    ordered_quantity,
+    total_received_quantity,
+    total_accepted_quantity,
+    total_rejected_quantity,
+    total_under_review_quantity,
+    MAX(ordered_quantity - total_accepted_quantity, 0) AS open_quantity,
+    CASE
+        WHEN po_lifecycle_status <> 'active'
+            OR po_item_lifecycle_status <> 'active'
+        THEN NULL
+        WHEN total_accepted_quantity = 0 THEN 'open'
+        WHEN total_accepted_quantity < ordered_quantity THEN 'partial'
+        ELSE 'complete'
+    END AS fulfillment_status
+FROM item_totals;
+
+CREATE VIEW vw_po_fulfillment AS
+WITH item_counts AS (
+    SELECT
+        po.po_id,
+        po.po_number,
+        po.po_lifecycle_status,
+        SUM(
+            CASE
+                WHEN item.po_item_lifecycle_status = 'active' THEN 1
+                ELSE 0
+            END
+        ) AS active_item_count,
+        SUM(
+            CASE
+                WHEN item.po_item_lifecycle_status = 'active'
+                    AND item.fulfillment_status = 'open'
+                THEN 1
+                ELSE 0
+            END
+        ) AS open_item_count,
+        SUM(
+            CASE
+                WHEN item.po_item_lifecycle_status = 'active'
+                    AND item.fulfillment_status = 'partial'
+                THEN 1
+                ELSE 0
+            END
+        ) AS partial_item_count,
+        SUM(
+            CASE
+                WHEN item.po_item_lifecycle_status = 'active'
+                    AND item.fulfillment_status = 'complete'
+                THEN 1
+                ELSE 0
+            END
+        ) AS complete_item_count
+    FROM purchase_orders AS po
+    LEFT JOIN vw_po_item_fulfillment AS item
+        ON item.po_id = po.po_id
+    GROUP BY po.po_id, po.po_number, po.po_lifecycle_status
+)
+SELECT
+    po_id,
+    po_number,
+    po_lifecycle_status,
+    active_item_count,
+    open_item_count,
+    partial_item_count,
+    complete_item_count,
+    CASE
+        WHEN po_lifecycle_status IN ('blocked', 'cancelled') THEN NULL
+        WHEN po_lifecycle_status <> 'active' THEN NULL
+        WHEN active_item_count = 0 THEN NULL
+        WHEN open_item_count = active_item_count THEN 'open'
+        WHEN complete_item_count = active_item_count THEN 'complete'
+        WHEN partial_item_count + complete_item_count > 0 THEN 'partial'
+        ELSE NULL
+    END AS fulfillment_status
+FROM item_counts;

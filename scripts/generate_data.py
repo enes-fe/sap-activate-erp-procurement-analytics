@@ -20,6 +20,21 @@ PO_NUMBER_PREFIX = 4500001000
 PR_PRICE_VARIATION_RANGE = (0.95, 1.07)
 PO_PRICE_VARIATION_RANGE = (0.98, 1.04)
 
+EXPECTED_PO_LIFECYCLE_STATUSES = {
+    "PO-001": "active",
+    "PO-002": "active",
+    "PO-003": "active",
+    "PO-004": "active",
+    "PO-005": "blocked",
+    "PO-006": "active",
+    "PO-007": "active",
+    "PO-008": "cancelled",
+}
+
+EXPECTED_CANCELLED_PO_ITEM_REFERENCES = {
+    ("PO-008", ITEM_NUMBER_STEP),
+}
+
 EXPECTED_COUNTS = {
     "vendors": 5,
     "plants": 2,
@@ -97,7 +112,7 @@ def resolve_repo_path(path_value: str | Path) -> Path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate the Phase 1 synthetic SQLite dataset."
+        description="Generate the synthetic ERP procurement SQLite dataset."
     )
     parser.add_argument(
         "--db",
@@ -589,7 +604,7 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-001",
             "po_created_date": date(2026, 2, 5),
             "po_approval_date": date(2026, 2, 6),
-            "po_status": "open",
+            "po_lifecycle_status": "active",
             "items": [
                 {"pr_ref": ("PR-001", ITEM_NUMBER_STEP), "ordered_quantity": 1000.0, "planned_delivery_date": date(2026, 2, 21)},
                 {"pr_ref": ("PR-001", 2 * ITEM_NUMBER_STEP), "ordered_quantity": 420.0, "planned_delivery_date": date(2026, 2, 24)},
@@ -602,7 +617,7 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-002",
             "po_created_date": date(2026, 2, 8),
             "po_approval_date": date(2026, 2, 9),
-            "po_status": "open",
+            "po_lifecycle_status": "active",
             "items": [
                 {"pr_ref": ("PR-002", ITEM_NUMBER_STEP), "ordered_quantity": 800.0, "planned_delivery_date": date(2026, 2, 25)},
                 {"pr_ref": ("PR-002", 2 * ITEM_NUMBER_STEP), "ordered_quantity": 40.0, "planned_delivery_date": date(2026, 2, 28)},
@@ -615,7 +630,7 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-003",
             "po_created_date": date(2026, 2, 11),
             "po_approval_date": date(2026, 2, 12),
-            "po_status": "open",
+            "po_lifecycle_status": "active",
             "items": [
                 {"pr_ref": ("PR-003", ITEM_NUMBER_STEP), "ordered_quantity": 12.0, "planned_delivery_date": date(2026, 2, 26)},
                 {"pr_ref": ("PR-003", 2 * ITEM_NUMBER_STEP), "ordered_quantity": 4.0, "planned_delivery_date": date(2026, 3, 3)},
@@ -629,7 +644,7 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-001",
             "po_created_date": date(2026, 2, 15),
             "po_approval_date": date(2026, 2, 17),
-            "po_status": "open",
+            "po_lifecycle_status": "active",
             "items": [
                 {"pr_ref": ("PR-004", ITEM_NUMBER_STEP), "ordered_quantity": 650.0, "planned_delivery_date": date(2026, 3, 3)},
                 {"pr_ref": ("PR-004", 2 * ITEM_NUMBER_STEP), "ordered_quantity": 180.0, "planned_delivery_date": date(2026, 3, 10)},
@@ -643,7 +658,7 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-002",
             "po_created_date": date(2026, 2, 18),
             "po_approval_date": None,
-            "po_status": "blocked",
+            "po_lifecycle_status": "blocked",
             "items": [
                 {"pr_ref": ("PR-005", ITEM_NUMBER_STEP), "ordered_quantity": 20.0, "planned_delivery_date": date(2026, 3, 1)},
                 {"pr_ref": ("PR-005", ITEM_NUMBER_STEP), "ordered_quantity": 15.0, "planned_delivery_date": date(2026, 3, 8)},
@@ -656,7 +671,7 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-003",
             "po_created_date": date(2026, 2, 19),
             "po_approval_date": date(2026, 2, 20),
-            "po_status": "open",
+            "po_lifecycle_status": "active",
             "items": [
                 {"material_id": "MAT-009", "ordered_quantity": 1.0, "planned_delivery_date": date(2026, 3, 6)},
             ],
@@ -668,7 +683,7 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-001",
             "po_created_date": date(2026, 2, 22),
             "po_approval_date": date(2026, 2, 23),
-            "po_status": "open",
+            "po_lifecycle_status": "active",
             "items": [
                 {"material_id": "MAT-002", "ordered_quantity": 150.0, "planned_delivery_date": date(2026, 3, 7)},
             ],
@@ -680,9 +695,9 @@ def generate_purchase_orders_and_items(
             "purchasing_group_id": "PG-003",
             "po_created_date": date(2026, 2, 24),
             "po_approval_date": None,
-            "po_status": "cancelled",
+            "po_lifecycle_status": "cancelled",
             "items": [
-                {"material_id": "MAT-012", "ordered_quantity": 8.0, "planned_delivery_date": date(2026, 3, 10), "po_item_status": "cancelled"},
+                {"material_id": "MAT-012", "ordered_quantity": 8.0, "planned_delivery_date": date(2026, 3, 10), "po_item_lifecycle_status": "cancelled"},
             ],
         },
     ]
@@ -706,7 +721,7 @@ def generate_purchase_orders_and_items(
                     else None
                 ),
                 "document_currency": currency_for_vendor(vendor),
-                "po_status": spec["po_status"],
+                "po_lifecycle_status": spec["po_lifecycle_status"],
             }
         )
 
@@ -740,7 +755,9 @@ def generate_purchase_orders_and_items(
                     "unit_price": unit_price,
                     "net_value": round(ordered_quantity * unit_price, 2),
                     "planned_delivery_date": iso_date(item_spec["planned_delivery_date"]),
-                    "po_item_status": item_spec.get("po_item_status", "open"),
+                    "po_item_lifecycle_status": item_spec.get(
+                        "po_item_lifecycle_status", "active"
+                    ),
                 }
             )
             po_item_counter += 1
@@ -1281,7 +1298,7 @@ def validate_pr_conversion_quantities(connection: sqlite3.Connection) -> None:
                COALESCE(
                    SUM(
                        CASE
-                           WHEN poi.po_item_status <> 'cancelled'
+                           WHEN poi.po_item_lifecycle_status <> 'cancelled'
                            THEN poi.ordered_quantity
                            ELSE 0
                        END
@@ -1476,36 +1493,231 @@ def validate_pr_header_item_statuses(connection: sqlite3.Connection) -> None:
     raise_if_rows(item_count_rows, "PR item count outside the 1-to-3 range")
 
 
-def validate_po_header_item_statuses(connection: sqlite3.Connection) -> None:
-    allowed_item_statuses_by_header = {
-        "open": {"open"},
-        "blocked": {"open"},
-        "cancelled": {"cancelled"},
-    }
-    rows = connection.execute(
+def validate_po_lifecycle_statuses(connection: sqlite3.Connection) -> None:
+    header_rows = connection.execute(
         """
-        SELECT po.po_id,
-               po.po_status,
-               poi.po_item_status,
-               COUNT(poi.po_item_id) OVER (PARTITION BY po.po_id) AS item_count
+        SELECT po_id, po_lifecycle_status
+        FROM purchase_orders
+        ORDER BY po_id
+        """
+    ).fetchall()
+    actual_header_statuses = {
+        str(po_id): str(po_lifecycle_status)
+        for po_id, po_lifecycle_status in header_rows
+    }
+    if actual_header_statuses != EXPECTED_PO_LIFECYCLE_STATUSES:
+        raise RuntimeError(
+            "Unexpected purchase order lifecycle status map: "
+            f"{actual_header_statuses}"
+        )
+
+    zero_item_headers = connection.execute(
+        """
+        SELECT po.po_id, po.po_lifecycle_status
         FROM purchase_orders AS po
         LEFT JOIN purchase_order_items AS poi
             ON poi.po_id = po.po_id
+        GROUP BY po.po_id, po.po_lifecycle_status
+        HAVING COUNT(poi.po_item_id) = 0
         """
     ).fetchall()
-    violations = []
-    zero_item_headers = []
-    for po_id, po_status, po_item_status, item_count in rows:
-        if item_count == 0:
-            zero_item_headers.append((po_id, po_status))
-            continue
-        allowed_statuses = allowed_item_statuses_by_header.get(str(po_status))
-        if allowed_statuses is None or po_item_status not in allowed_statuses:
-            violations.append((po_id, po_status, po_item_status))
-    if zero_item_headers:
-        raise RuntimeError(f"Purchase orders with no items: {zero_item_headers}")
-    if violations:
-        raise RuntimeError(f"PO header/item status consistency violations: {violations}")
+    raise_if_rows(zero_item_headers, "Purchase orders with no items")
+
+    item_rows = connection.execute(
+        """
+        SELECT po.po_id,
+               po.po_lifecycle_status,
+               poi.po_item_number,
+               poi.po_item_lifecycle_status
+        FROM purchase_orders AS po
+        JOIN purchase_order_items AS poi
+            ON poi.po_id = po.po_id
+        ORDER BY po.po_id, poi.po_item_number
+        """
+    ).fetchall()
+
+    exact_item_status_violations = []
+    lifecycle_consistency_violations = []
+    for po_id, po_lifecycle_status, po_item_number, po_item_lifecycle_status in item_rows:
+        item_reference = (str(po_id), int(po_item_number))
+        expected_item_lifecycle_status = (
+            "cancelled"
+            if item_reference in EXPECTED_CANCELLED_PO_ITEM_REFERENCES
+            else "active"
+        )
+        if po_item_lifecycle_status != expected_item_lifecycle_status:
+            exact_item_status_violations.append(
+                (
+                    po_id,
+                    po_item_number,
+                    po_item_lifecycle_status,
+                    expected_item_lifecycle_status,
+                )
+            )
+
+        if po_lifecycle_status == "cancelled":
+            if po_item_lifecycle_status != "cancelled":
+                lifecycle_consistency_violations.append(
+                    (po_id, po_lifecycle_status, po_item_number, po_item_lifecycle_status)
+                )
+        elif po_lifecycle_status in {"active", "blocked"}:
+            if po_item_lifecycle_status != "active":
+                lifecycle_consistency_violations.append(
+                    (po_id, po_lifecycle_status, po_item_number, po_item_lifecycle_status)
+                )
+        elif po_lifecycle_status == "closed":
+            lifecycle_consistency_violations.append(
+                (po_id, po_lifecycle_status, po_item_number, po_item_lifecycle_status)
+            )
+
+    if exact_item_status_violations:
+        raise RuntimeError(
+            "Unexpected purchase order item lifecycle statuses: "
+            f"{exact_item_status_violations}"
+        )
+    if lifecycle_consistency_violations:
+        raise RuntimeError(
+            "PO lifecycle header/item consistency violations: "
+            f"{lifecycle_consistency_violations}"
+        )
+
+
+def validate_zero_receipt_fulfillment_views(connection: sqlite3.Connection) -> None:
+    goods_receipt_count = connection.execute(
+        "SELECT COUNT(*) FROM goods_receipts"
+    ).fetchone()[0]
+    if goods_receipt_count != 0:
+        raise RuntimeError(
+            f"Expected 0 goods receipt rows before Phase 3, found {goods_receipt_count}"
+        )
+
+    po_item_count = connection.execute(
+        "SELECT COUNT(*) FROM purchase_order_items"
+    ).fetchone()[0]
+    po_item_view_count = connection.execute(
+        "SELECT COUNT(*) FROM vw_po_item_fulfillment"
+    ).fetchone()[0]
+    if po_item_view_count != po_item_count or po_item_view_count != 15:
+        raise RuntimeError(
+            "Unexpected vw_po_item_fulfillment row count: "
+            f"view={po_item_view_count}, purchase_order_items={po_item_count}"
+        )
+
+    item_status_counts = {
+        fulfillment_status: row_count
+        for fulfillment_status, row_count in connection.execute(
+            """
+            SELECT fulfillment_status, COUNT(*)
+            FROM vw_po_item_fulfillment
+            GROUP BY fulfillment_status
+            """
+        ).fetchall()
+    }
+    expected_item_status_counts = {None: 3, "open": 12}
+    if item_status_counts != expected_item_status_counts:
+        raise RuntimeError(
+            "Unexpected vw_po_item_fulfillment status counts: "
+            f"{item_status_counts}"
+        )
+
+    null_item_rows = connection.execute(
+        """
+        SELECT po_id, po_item_number
+        FROM vw_po_item_fulfillment
+        WHERE fulfillment_status IS NULL
+        ORDER BY po_id, po_item_number
+        """
+    ).fetchall()
+    expected_null_item_rows = [("PO-005", 10), ("PO-005", 20), ("PO-008", 10)]
+    if null_item_rows != expected_null_item_rows:
+        raise RuntimeError(
+            "Unexpected NULL item fulfillment rows: " f"{null_item_rows}"
+        )
+
+    nonzero_quantity_rows = connection.execute(
+        """
+        SELECT po_id,
+               po_item_number,
+               total_received_quantity,
+               total_accepted_quantity,
+               total_rejected_quantity,
+               total_under_review_quantity
+        FROM vw_po_item_fulfillment
+        WHERE total_received_quantity <> 0
+            OR total_accepted_quantity <> 0
+            OR total_rejected_quantity <> 0
+            OR total_under_review_quantity <> 0
+        """
+    ).fetchall()
+    raise_if_rows(nonzero_quantity_rows, "Nonzero fulfillment quantities without GRs")
+
+    open_quantity_rows = connection.execute(
+        """
+        SELECT po_id, po_item_number, ordered_quantity, open_quantity, fulfillment_status
+        FROM vw_po_item_fulfillment
+        WHERE po_lifecycle_status = 'active'
+            AND po_item_lifecycle_status = 'active'
+            AND (
+                fulfillment_status <> 'open'
+                OR ABS(open_quantity - ordered_quantity) > 0.000001
+            )
+        """
+    ).fetchall()
+    raise_if_rows(open_quantity_rows, "Invalid active item zero-GR fulfillment results")
+
+    po_count = connection.execute("SELECT COUNT(*) FROM purchase_orders").fetchone()[0]
+    po_view_count = connection.execute("SELECT COUNT(*) FROM vw_po_fulfillment").fetchone()[0]
+    if po_view_count != po_count or po_view_count != 8:
+        raise RuntimeError(
+            "Unexpected vw_po_fulfillment row count: "
+            f"view={po_view_count}, purchase_orders={po_count}"
+        )
+
+    po_fulfillment_status_counts = {
+        fulfillment_status: row_count
+        for fulfillment_status, row_count in connection.execute(
+            """
+            SELECT fulfillment_status, COUNT(*)
+            FROM vw_po_fulfillment
+            GROUP BY fulfillment_status
+            """
+        ).fetchall()
+    }
+    expected_po_fulfillment_status_counts = {None: 2, "open": 6}
+    if po_fulfillment_status_counts != expected_po_fulfillment_status_counts:
+        raise RuntimeError(
+            "Unexpected vw_po_fulfillment status counts: "
+            f"{po_fulfillment_status_counts}"
+        )
+
+    null_po_rows = [
+        po_id
+        for (po_id,) in connection.execute(
+            """
+            SELECT po_id
+            FROM vw_po_fulfillment
+            WHERE fulfillment_status IS NULL
+            ORDER BY po_id
+            """
+        ).fetchall()
+    ]
+    if null_po_rows != ["PO-005", "PO-008"]:
+        raise RuntimeError(f"Unexpected NULL PO fulfillment rows: {null_po_rows}")
+
+    open_po_rows = [
+        po_id
+        for (po_id,) in connection.execute(
+            """
+            SELECT po_id
+            FROM vw_po_fulfillment
+            WHERE fulfillment_status = 'open'
+            ORDER BY po_id
+            """
+        ).fetchall()
+    ]
+    expected_open_po_rows = ["PO-001", "PO-002", "PO-003", "PO-004", "PO-006", "PO-007"]
+    if open_po_rows != expected_open_po_rows:
+        raise RuntimeError(f"Unexpected open PO fulfillment rows: {open_po_rows}")
 
 
 def validate_pr_linked_po_creation_dates(connection: sqlite3.Connection) -> None:
@@ -1559,7 +1771,8 @@ def validate_phase2_rules(connection: sqlite3.Connection) -> None:
     validate_purchasing_group_fit(connection)
     validate_downstream_tables_empty(connection)
     validate_pr_header_item_statuses(connection)
-    validate_po_header_item_statuses(connection)
+    validate_po_lifecycle_statuses(connection)
+    validate_zero_receipt_fulfillment_views(connection)
     validate_pr_linked_po_creation_dates(connection)
 
 
