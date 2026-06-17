@@ -1,5 +1,6 @@
 PRAGMA foreign_keys = ON;
 
+DROP VIEW IF EXISTS vw_po_item_delivery_performance;
 DROP VIEW IF EXISTS vw_po_fulfillment;
 DROP VIEW IF EXISTS vw_po_item_fulfillment;
 
@@ -421,6 +422,61 @@ SELECT
         ELSE 'complete'
     END AS fulfillment_status
 FROM item_totals;
+
+CREATE VIEW vw_po_item_delivery_performance AS
+WITH posted_receipt_progress AS (
+    SELECT
+        gr.po_item_id,
+        gr.receipt_date,
+        gr.receipt_number,
+        gr.goods_receipt_id,
+        SUM(gr.accepted_quantity) OVER (
+            PARTITION BY gr.po_item_id
+            ORDER BY gr.receipt_date, gr.receipt_number, gr.goods_receipt_id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS cumulative_accepted_quantity
+    FROM goods_receipts AS gr
+    WHERE gr.receipt_status = 'posted'
+),
+fulfillment_dates AS (
+    SELECT
+        progress.po_item_id,
+        MIN(progress.receipt_date) AS fulfillment_date
+    FROM posted_receipt_progress AS progress
+    JOIN purchase_order_items AS poi
+        ON poi.po_item_id = progress.po_item_id
+    WHERE progress.cumulative_accepted_quantity >= poi.ordered_quantity
+    GROUP BY progress.po_item_id
+)
+SELECT
+    item.po_item_id,
+    item.po_id,
+    po.po_number,
+    po.vendor_id,
+    item.po_item_number,
+    item.po_lifecycle_status,
+    item.po_item_lifecycle_status,
+    poi.planned_delivery_date,
+    item.ordered_quantity,
+    item.total_accepted_quantity,
+    item.open_quantity,
+    item.fulfillment_status,
+    dates.fulfillment_date,
+    CASE
+        WHEN item.po_lifecycle_status <> 'active'
+            OR item.po_item_lifecycle_status <> 'active'
+        THEN NULL
+        WHEN dates.fulfillment_date IS NULL THEN 'not fulfilled'
+        WHEN dates.fulfillment_date <= poi.planned_delivery_date THEN 'on time in full'
+        ELSE 'late in full'
+    END AS delivery_performance_status
+FROM vw_po_item_fulfillment AS item
+JOIN purchase_order_items AS poi
+    ON poi.po_item_id = item.po_item_id
+JOIN purchase_orders AS po
+    ON po.po_id = item.po_id
+LEFT JOIN fulfillment_dates AS dates
+    ON dates.po_item_id = item.po_item_id;
 
 CREATE VIEW vw_po_fulfillment AS
 WITH item_counts AS (
