@@ -1,274 +1,205 @@
-# PROJECT_CONTEXT.md
-
-# SAP Activate ERP Procurement Analytics Project
+# SAP Activate ERP Procurement Analytics Project Context
 
 ## 1. Project Overview
 
-This project is a portfolio-oriented data analytics and SAP implementation simulation project.
+This project is a portfolio-oriented procurement analytics simulation. It combines SAP Activate project methodology, ERP procure-to-pay process understanding, SQLite data modeling, deterministic synthetic data generation, and SQL-ready analytics.
 
-The main idea is to combine three areas:
-
-1. SAP Activate project methodology
-2. ERP procurement business processes
-3. SQL-based business analytics
-
-The project simulates a company that is preparing or executing an SAP S/4HANA procurement-related implementation. Instead of building a real SAP system, this project creates a realistic analytical environment around procurement, purchasing, suppliers, materials, purchase orders, goods receipts, invoices, and project KPIs.
-
-The goal is to show both technical data analytics ability and business understanding of ERP/SAP projects.
+The repository does not build or connect to a live SAP system. It creates a realistic analytical environment for Marmara Components, a fictional mid-sized manufacturing and industrial components distribution company, so the project can demonstrate both technical analytics work and SAP-oriented business thinking.
 
 ## 2. Why This Project Exists
 
-The project is designed to demonstrate that I can work at the intersection of:
+The project is designed to demonstrate practical capability at the intersection of:
 
-* Data analysis
-* SQL
-* ERP/SAP business processes
-* Procurement analytics
-* IT project management
-* SAP Activate methodology
-* Business requirements and KPI thinking
+- Data analysis.
+- SQL and relational modeling.
+- ERP/SAP procurement processes.
+- Procurement KPI design.
+- IT project and SAP Activate framing.
+- Business requirements and stakeholder communication.
 
-This is not just a random SQL project. It should look like a realistic junior data analyst / business analyst / SAP-oriented portfolio project.
-
-The final output should help explain how procurement data can be analyzed during or after an SAP S/4HANA implementation project.
+The final portfolio should be readable to recruiters, data analysts, business analysts, SAP consultants, and project managers.
 
 ## 3. Business Scenario
 
-Marmara Components, a fictional mid-sized manufacturing and industrial components distribution company, is implementing or improving its ERP procurement processes using SAP Activate.
+Marmara Components is implementing or improving ERP procurement processes using SAP Activate as the project framing. The company wants better visibility into supplier performance, purchase order processing, delivery reliability, invoice matching, spend distribution, material category performance, process bottlenecks, data quality risk, and implementation readiness.
 
-The company wants to understand:
+The analytics layer supports stakeholders such as procurement managers, buyers, finance teams, SAP consultants, business analysts, project managers, and key users.
 
-* Supplier performance
-* Purchase order processing efficiency
-* Delivery reliability
-* Invoice and goods receipt matching issues
-* Procurement spend distribution
-* Material category performance
-* Process bottlenecks
-* Data quality issues
-* Project readiness and KPI monitoring
+## 4. Technical Scope
 
-The analytics layer will support project stakeholders such as:
+Implemented stack:
 
-* Procurement managers
-* SAP consultants
-* Business analysts
-* Project managers
-* Key users
-* Finance and controlling teams
+- SQLite is the current database.
+- Python 3 is used for deterministic synthetic data generation.
+- The generator uses Python standard library modules and Faker.
+- SQL is used for the schema, constraints, views, validation-ready logic, and future analytics query files.
+- Markdown is used for documentation.
+- Git and GitHub are used for version control and portfolio presentation.
+- Power BI or Tableau remain optional future dashboard layers.
 
-## 4. SAP Activate Framing
+## 5. Actual Data Model
 
-The project should be framed around the SAP Activate methodology.
+The current SQLite schema contains these 16 persisted tables:
 
-SAP Activate phases to consider:
+- `vendors`
+- `plants`
+- `purchasing_groups`
+- `material_groups`
+- `materials`
+- `purchase_requisitions`
+- `purchase_requisition_items`
+- `purchase_orders`
+- `purchase_order_items`
+- `goods_receipts`
+- `invoices`
+- `invoice_items`
+- `payments`
+- `sap_activate_project_tasks`
+- `change_requests`
+- `data_quality_issues`
 
-1. Discover
-2. Prepare
-3. Explore
-4. Realize
-5. Deploy
-6. Run
+The current schema also contains three analytical views:
 
-The project does not need to fully implement all phases technically. However, the documentation and project storytelling should connect the analytics work to these phases.
+- `vw_po_item_fulfillment`
+- `vw_po_fulfillment`
+- `vw_po_item_delivery_performance`
 
-Example interpretation:
+Current generated row counts:
 
-* Discover: Identify business problem and high-level procurement pain points.
-* Prepare: Define project scope, stakeholders, KPIs, and data sources.
-* Explore: Analyze fit-gap, process requirements, and reporting needs.
-* Realize: Build database, SQL queries, KPIs, and dashboards.
-* Deploy: Prepare final reporting outputs and documentation.
-* Run: Monitor procurement KPIs and continuous improvement opportunities.
+| Object | Rows |
+| --- | ---: |
+| `vendors` | 5 |
+| `plants` | 2 |
+| `purchasing_groups` | 3 |
+| `material_groups` | 4 |
+| `materials` | 12 |
+| `purchase_requisitions` | 10 |
+| `purchase_requisition_items` | 18 |
+| `purchase_orders` | 8 |
+| `purchase_order_items` | 15 |
+| `goods_receipts` | 10 |
+| `sap_activate_project_tasks` | 12 |
 
-## 5. Main Project Objective
+The following tables currently exist for later phases but are empty: `invoices`, `invoice_items`, `payments`, `change_requests`, and `data_quality_issues`.
 
-Build a procurement analytics database and reporting layer that answers business questions through SQL and structured analysis.
+## 6. Important Architecture Decision
 
-The project should include:
+The pre-Phase 3 refactor separated several concepts that should not be compressed into a single status field:
 
-* A clean database schema
-* Realistic synthetic ERP-style procurement data
-* SQL analysis queries
-* Business KPI definitions
-* SAP Activate-inspired documentation
-* Optional dashboard layer
-* Final README and portfolio explanation
+- PO lifecycle: stored on `purchase_orders.po_lifecycle_status`.
+- PO-item lifecycle: stored on `purchase_order_items.po_item_lifecycle_status`.
+- Receipt workflow: stored on `goods_receipts.receipt_status`.
+- Quantitative receipt facts: stored as received, accepted, and rejected quantities.
+- Derived fulfillment: calculated by SQL views from posted accepted quantities.
+- Future invoice progress: to be derived separately when invoice records are generated.
 
-## 6. Technical Scope
+This keeps document lifecycle, operational receipt workflow, quantity facts, fulfillment progress, and invoice progress independently understandable. It also prevents one PO status field from representing lifecycle, delivery progress, timeliness, and invoice progress at the same time.
 
-Preferred technology stack:
+## 7. KPI Decision
 
-* SQL
-* PostgreSQL or SQLite
-* Python for data generation and preprocessing
-* pandas for synthetic dataset preparation
-* Power BI or Tableau optionally for dashboarding
-* Markdown documentation
-* GitHub for portfolio presentation
+The primary delivery-reliability KPI is `PO Item On-Time In-Full Rate`.
 
-The project should remain realistic but manageable for one student.
+This KPI asks: what percentage of due active PO items were fully fulfilled with accepted quantity on or before the planned delivery date?
 
-## 7. Planned Data Model
+Supporting decisions:
 
-Possible tables:
+- Receipt Event On-Time Rate is a secondary operational diagnostic, not the primary supplier reliability KPI.
+- Accepted quantity determines fulfillment.
+- Physical received quantity alone does not close a PO item.
+- Rejected quantity does not close a PO item.
+- Split deliveries should not overweight supplier reliability at the item level.
 
-* vendors
-* materials
-* material_groups
-* purchase_requisitions
-* purchase_orders
-* purchase_order_items
-* goods_receipts
-* invoices
-* payments
-* plants
-* purchasing_groups
-* users or buyers
-* sap_activate_project_tasks
-* change_requests
-* data_quality_issues
+Current deterministic Phase 3 validation results, using reporting date `2026-03-31`:
 
-The data model should support procurement analytics and project management analytics together.
+- Eligible active due PO items: 12.
+- On-time-in-full PO items: 3.
+- PO Item On-Time In-Full Rate: 25.0%.
+- On-time receipt events: 5.
+- Late receipt events: 5.
+- Receipt Event On-Time Rate: 50.0%.
+- Average delay across late receipt events: 2.2 calendar days.
 
-## 8. Possible KPIs
+These are validation results for the synthetic dataset, not business targets or benchmarks.
 
-Procurement KPIs:
+## 8. Current Roadmap Status
 
-* Total procurement spend
-* Spend by vendor
-* Spend by material group
-* Purchase order cycle time
-* Purchase requisition to purchase order conversion time
-* On-time delivery rate
-* Late delivery rate
-* Goods receipt vs invoice mismatch rate
-* Average invoice processing time
-* Top vendors by volume and spend
-* Maverick buying indicators
-* Open purchase orders
-* Blocked invoices
-* Supplier reliability score
+| Step | Status | Notes |
+| --- | --- | --- |
+| Step 1: Foundation | Completed | Project scope, README, business case, KPI catalog, SAP Activate mapping, and project context exist. |
+| Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and three analytical views. |
+| Step 3: Synthetic data | Phase 1-3 completed | Master data, purchase requisitions, purchase orders, PR-to-PO conversion, direct PO scenarios, goods receipts, and SAP Activate project tasks are generated. Finance and project-exception tables remain for later phases. |
+| Step 4: SQL analytics | Partially started | Fulfillment and delivery-performance logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
+| Step 5: Documentation | In progress | Current work aligns documentation with the pre-Phase 3 model refactor and Phase 3 goods receipt implementation. |
+| Step 6: Dashboard | Not started / optional | Dashboard tools should wait until core SQL outputs are stable. |
 
-SAP Activate / project KPIs:
+Latest completed technical milestone:
 
-* Project task completion rate
-* Open issues by phase
-* Change request count by phase
-* Data migration readiness
-* Test case pass rate
-* Defect rate by process area
-* Go-live readiness score
+```text
+Phase 3 goods receipt and delivery-performance analytics
+```
 
-## 9. Business Questions
+## 9. Current Completed Scope
 
-The project should answer questions like:
+Completed:
 
-* Which vendors create the highest spend?
-* Which suppliers are frequently late?
-* Which material groups have the highest procurement volume?
-* Where do invoice mismatches occur most often?
-* Which purchasing groups process orders most efficiently?
-* Are there bottlenecks between requisition, order, goods receipt, and invoice?
-* Which SAP Activate phase has the most project issues?
-* What risks should be monitored before go-live?
-* What procurement KPIs should be monitored during the Run phase?
+- SQLite schema.
+- Deterministic Python data generator.
+- Default seed `42`.
+- Master data generation.
+- Purchase requisition generation.
+- Purchase order generation.
+- PR-to-PO conversion scenarios.
+- Direct PO scenarios.
+- Goods receipt generation.
+- PO lifecycle and fulfillment separation.
+- Fulfillment views.
+- PO-item delivery-performance view.
+- Phase 1, Phase 2, and Phase 3 validations.
+- Integrity, foreign-key, and deterministic regeneration checks.
+
+Not yet implemented:
+
+- Invoice data generation.
+- Invoice item data generation.
+- Payment data generation.
+- Change request data generation.
+- Data quality issue generation.
+- Separate SQL analytics query files.
+- Dashboard implementation.
+- Final portfolio screenshots.
+- SAP API or SAP Learning Hub integration.
 
 ## 10. Development Principles
 
-When working on this repository:
+- Keep the project realistic and business-oriented.
+- Treat `database/schema.sql` and `scripts/generate_data.py` as technical source of truth for implemented behavior.
+- Prefer simple, explicit SQL and Python over unnecessary abstraction.
+- Keep synthetic data deterministic and validation-backed.
+- Every technical output should connect to a business question.
+- Do not claim live SAP integration, production data, or completed future phases.
+- Keep documentation accurate for the current repository state.
 
-* Keep the project realistic and business-oriented.
-* Prefer simple but clean architecture over unnecessary complexity.
-* Document every important decision.
-* Use clear folder structure.
-* Do not over-engineer.
-* SQL queries should be readable and explained.
-* Synthetic data should look realistic enough for portfolio use.
-* Every technical output should connect to a business question.
-* The project should be understandable to recruiters, SAP consultants, data analysts, and business analysts.
-
-## 11. Expected Folder Structure
-
-Possible structure:
+## 11. Repository Structure
 
 ```text
 sap-activate-erp-procurement-analytics/
-│
-├── data/
-│   ├── raw/
-│   ├── processed/
-│
-├── database/
-│   ├── schema.sql
-│   ├── seed_data.sql
-│
-├── notebooks/
-│   ├── data_generation.ipynb
-│
-├── scripts/
-│   ├── generate_data.py
-│
-├── sql/
-│   ├── 01_procurement_spend_analysis.sql
-│   ├── 02_supplier_performance.sql
-│   ├── 03_cycle_time_analysis.sql
-│   ├── 04_invoice_matching_analysis.sql
-│   ├── 05_project_kpi_analysis.sql
-│
-├── docs/
-│   ├── business_case.md
-│   ├── sap_activate_mapping.md
-│   ├── kpi_catalog.md
-│
-├── dashboard/
-│
-├── PROJECT_CONTEXT.md
-├── README.md
-└── requirements.txt
+|
+|-- database/
+|   |-- schema.sql
+|   |-- marmara_components.db        # generated, ignored by Git
+|
+|-- docs/
+|   |-- business_case.md
+|   |-- data_model.md
+|   |-- kpi_catalog.md
+|   |-- sap_activate_mapping.md
+|
+|-- scripts/
+|   |-- generate_data.py
+|
+|-- README.md
+|-- PROJECT_CONTEXT.md
+|-- .gitignore
 ```
 
-## 12. First Roadmap
-
-### Step 1: Project Foundation
-
-* Create PROJECT_CONTEXT.md
-* Create README.md draft
-* Define business case
-* Define folder structure
-
-### Step 2: Data Model
-
-* Design procurement ERD
-* Create SQL schema
-* Define primary and foreign keys
-* Define realistic ERP-style fields
-
-### Step 3: Synthetic Data
-
-* Generate realistic vendor, material, PO, GR, invoice, and project task data
-* Add controlled problems such as late deliveries, invoice mismatches, and open change requests
-
-### Step 4: SQL Analytics
-
-* Write SQL queries for procurement KPIs
-* Write SQL queries for SAP Activate project KPIs
-* Explain business interpretation of each query
-
-### Step 5: Documentation
-
-* Create business case document
-* Create SAP Activate mapping
-* Create KPI catalog
-* Create final README
-
-### Step 6: Dashboard Optional
-
-* Build Power BI or Tableau dashboard if time allows
-* Include screenshots in README
-
-## 13. Current Status
-
-The project is at the initial setup stage.
-
-The immediate next task is to create this PROJECT_CONTEXT.md file and then build the first project structure.
+Additional folders such as `sql/` or `dashboard/` may be added later when those phases are implemented.

@@ -2,167 +2,124 @@
 
 ## Purpose
 
-This document explains how the SAP Activate methodology connects to the SAP Activate ERP Procurement Analytics project. The project is a portfolio-oriented simulation, so the phases are used to structure business thinking, analytics requirements, deliverables, and implementation storytelling.
+This document explains how SAP Activate methodology frames the SAP Activate ERP Procurement Analytics project. The repository is a portfolio-oriented analytics simulation, not an SAP Activate implementation tool and not a live SAP production deployment.
 
-The goal is to show how procurement analytics can support an SAP S/4HANA implementation from early problem discovery through post-go-live monitoring.
+The goal is to show how procurement analytics requirements, data modeling, synthetic data, KPI logic, and documentation can be organized around a realistic SAP S/4HANA project story.
 
 ## Phase Mapping
 
-| SAP Activate Phase | Project Activity | Expected Analytics Contribution | Example Deliverables |
+| SAP Activate Phase | Project Activity | Analytics Contribution | Current Status |
 | --- | --- | --- | --- |
-| Discover | Identify the procurement business problem, high-level pain points, and improvement opportunities. | Translate procurement issues into measurable business questions and candidate KPIs. | Business case, initial pain point list, high-level procurement analytics scope, stakeholder overview. |
-| Prepare | Define project scope, stakeholders, planned data sources, and KPI priorities. | Establish the reporting foundation before database design and SQL development begin. | KPI catalog, stakeholder matrix, planned source table list, analytics scope definition. |
-| Explore | Review current procurement process gaps and reporting needs through a fit-gap style lens. | Connect reporting requirements to process steps such as requisition, purchase order, goods receipt, invoice, and payment. | Reporting requirement notes, process gap list, KPI-to-process mapping, data quality risk list. |
-| Realize | Build the analytical layer for procurement and project KPIs. | Convert agreed KPI definitions into database structures, SQL queries, and analysis outputs. | SQL schema, procurement dataset, KPI queries, analysis documentation, optional dashboard draft. |
-| Deploy | Prepare final outputs for stakeholder review and go-live readiness support. | Use analytics to highlight readiness, unresolved risks, testing gaps, and priority operational reports. | Final KPI reports, readiness summary, dashboard screenshots, documentation package. |
-| Run | Monitor procurement performance and continuous improvement opportunities after go-live. | Track operational KPIs, supplier performance, invoice exceptions, and project stabilization metrics. | Run-phase KPI dashboard, improvement backlog, recurring procurement performance review pack. |
+| Discover | Identify the procurement business problem, pain points, and improvement opportunities. | Translate business pain points into measurable questions and candidate KPIs. | Business case complete. |
+| Prepare | Define scope, stakeholders, planned sources, and KPI priorities. | Establish reporting scope before implementation. | Scope and KPI catalog established. |
+| Explore | Review procurement process gaps and reporting requirements. | Connect reporting needs to process steps such as requisition, PO, goods receipt, invoice, and payment. | Process, data model, and KPI requirements documented. |
+| Realize | Build the analytical layer iteratively. | Convert agreed requirements into schema, deterministic data, views, and validation logic. | Schema and synthetic process data complete through goods receipt; later finance and project-exception phases remain. |
+| Deploy | Prepare final reporting outputs for review and readiness storytelling. | Package SQL query outputs, documentation, dashboard screenshots, and readiness reporting. | Not started. |
+| Run | Monitor procurement performance and continuous improvement opportunities. | Track recurring procurement KPIs, supplier performance, and exception diagnostics. | Conceptual / future analytics use. |
 
 ## Discover
 
-### Project Activity
+The Discover phase frames the reason for the project. In this simulation, Marmara Components has limited visibility into procurement performance and wants better control during an SAP S/4HANA procurement improvement initiative.
 
-The Discover phase frames the reason for the project. In this simulation, Marmara Components, a fictional mid-sized manufacturing and industrial components distribution company, has limited visibility into procurement performance and wants better control during an SAP S/4HANA procurement implementation.
-
-Key activities include:
-
-- Define the procurement process problem.
-- Identify main stakeholders.
-- Capture business pain points.
-- Convert pain points into high-level analytics questions.
-
-### Expected Analytics Contribution
-
-Analytics helps make the business problem concrete. Instead of describing procurement issues only in general terms, the project identifies measurable areas such as supplier reliability, purchase order cycle time, invoice matching, spend concentration, and data quality readiness.
-
-### Example Deliverables
+Completed artifacts:
 
 - `docs/business_case.md`
-- Initial business questions
-- Draft procurement KPI themes
-- Stakeholder and pain point summary
+- Initial stakeholder and pain-point framing.
+- Practical procurement analytics themes, including supplier reliability, spend visibility, open orders, invoice matching, and readiness risk.
 
 ## Prepare
 
-### Project Activity
+The Prepare phase turns the idea into a controlled analytics scope. For this repository, that means defining stakeholders, planned source objects, KPI priorities, and project documentation before expanding implementation.
 
-The Prepare phase turns the initial concept into a structured project scope. For this repository, that means defining which procurement areas, stakeholder needs, and KPI categories will be included before creating any database schema or SQL queries.
-
-Key activities include:
-
-- Confirm the project scope.
-- Define expected source tables.
-- Identify procurement and project KPI categories.
-- Plan documentation and analytics deliverables.
-
-### Expected Analytics Contribution
-
-Analytics supports scope control. It clarifies which questions will be answered and which tables will likely be needed later, such as vendors, materials, purchase requisitions, purchase orders, goods receipts, invoices, payments, project tasks, defects, and change requests.
-
-### Example Deliverables
+Completed artifacts:
 
 - `docs/kpi_catalog.md`
-- Planned data source table list
-- Analytics scope statement
-- KPI prioritization notes
+- Current project scope and technical context.
+- Planned source table list, later replaced by the implemented 16-table SQLite model.
+- KPI prioritization into core and extended/supporting measures.
 
 ## Explore
 
-### Project Activity
+The Explore phase connects procurement processes to reporting requirements. In a real SAP project, this would happen through fit-gap workshops and design validation. In this portfolio project, it is represented by mapping business questions to source objects, grains, statuses, and KPI definitions.
 
-The Explore phase connects the business process to reporting requirements. In a real SAP project, this would include fit-gap workshops and process design discussions. In this portfolio project, the phase is represented by mapping procurement questions to expected analytics outputs.
+Completed artifacts:
 
-Key activities include:
+- `docs/data_model.md`
+- Process-to-data model explanation.
+- KPI-to-source mapping.
+- Documentation of lifecycle, fulfillment, receipt workflow, and future invoice progress decisions.
 
-- Review procurement process steps.
-- Identify where delays, mismatches, or data quality risks may appear.
-- Connect each business question to a measurable KPI.
-- Define how SAP Activate project KPIs support readiness tracking.
+## Explore-to-Realize Design Decision
 
-### Expected Analytics Contribution
+Supplier reliability reporting required an item-level on-time-in-full KPI. That requirement exposed a modeling issue: receipt workflow, quantity facts, PO lifecycle, PO-item lifecycle, and fulfillment progress cannot be represented cleanly by one stored status field.
 
-Analytics contributes evidence for process design and reporting decisions. For example, if invoice mismatch rate is a key metric, the future data model must support comparison between purchase order values, goods receipts, and invoice records.
+Before Phase 3 goods receipt data was added, the model was refactored to separate:
 
-### Example Deliverables
+- Stored PO lifecycle.
+- Stored PO-item lifecycle.
+- Receipt workflow status.
+- Received, accepted, and rejected quantity facts.
+- Derived fulfillment status.
+- Future derived invoice progress.
 
-- Procurement process analytics map
-- KPI-to-process mapping
-- Data quality risk assumptions
-- Reporting requirement list
+This is a practical example of Explore requirements influencing Realize implementation before extending the dataset.
 
 ## Realize
 
-### Project Activity
+The Realize phase is where the analytical assets become executable. The repository has now implemented:
 
-The Realize phase is where the analytical assets are built. For this project, future Realize work will include creating the database schema, generating realistic ERP-style synthetic data, writing SQL queries, and preparing optional dashboard outputs.
+- Executable SQLite schema.
+- Deterministic master data.
+- Purchase requisition scenarios.
+- Purchase order scenarios.
+- PR-to-PO conversion and direct PO scenarios.
+- Goods receipt scenarios.
+- Lifecycle and fulfillment architecture.
+- `vw_po_item_fulfillment`.
+- `vw_po_fulfillment`.
+- `vw_po_item_delivery_performance`.
+- Validation and deterministic regeneration checks.
 
-Key activities include:
-
-- Create the procurement database schema.
-- Prepare controlled synthetic procurement data.
-- Write SQL analysis queries.
-- Validate KPI logic against business questions.
-
-### Expected Analytics Contribution
-
-Analytics becomes executable in this phase. KPI definitions from the catalog are translated into SQL logic and reporting outputs. The project should keep every technical object connected to a business question.
-
-### Example Deliverables
-
-- Database schema
-- Procurement and project KPI SQL queries
-- Analysis result documentation
-- Optional Power BI or Tableau dashboard draft
+This represents iterative realization of the analytical layer. Separate SQL analytics query files, invoice scenarios, payments, change requests, data quality issue data, dashboards, and final screenshots remain future work.
 
 ## Deploy
 
-### Project Activity
+The Deploy phase remains future-oriented for this repository. It should package stable analytical outputs for portfolio review and implementation-readiness storytelling.
 
-The Deploy phase prepares the project outputs for final review and go-live readiness storytelling. In a real implementation, this phase would include cutover preparation, training, final testing, and readiness checks.
+Future Deploy outputs should include:
 
-Key activities include:
+- Final SQL query package.
+- Documentation review and cleanup.
+- Dashboard screenshots if a dashboard is built.
+- Readiness reporting based on implemented project and data quality scenarios.
+- Clear explanation of what is synthetic, what is implemented, and what is planned.
 
-- Summarize KPI findings.
-- Review unresolved project and procurement risks.
-- Prepare final documentation.
-- Package portfolio outputs clearly.
-
-### Expected Analytics Contribution
-
-Analytics supports readiness decisions by showing whether key procurement and project indicators are acceptable. Examples include test case pass rate, defect status, data migration readiness, blocked invoice trends, and open purchase order exposure.
-
-### Example Deliverables
-
-- Go-live readiness analytics summary
-- Final KPI report
-- Dashboard screenshots if created
-- Final documentation package
+This project should not claim a live SAP production deployment.
 
 ## Run
 
-### Project Activity
+The Run phase is also future-oriented. It represents the kind of recurring analytics that procurement and project teams could monitor after implementation.
 
-The Run phase focuses on post-go-live monitoring and continuous improvement. After SAP S/4HANA is live, procurement analytics should help the business compare performance, monitor exceptions, and identify improvement opportunities.
+Future Run use cases include:
 
-Key activities include:
+- Recurring item-level OTIF monitoring.
+- Receipt-event delay diagnostics.
+- Supplier performance monitoring.
+- Open quantity and open PO follow-up.
+- Invoice exception monitoring after invoice phases are implemented.
+- Continuous improvement tracking based on recurring KPI reviews.
 
-- Monitor recurring procurement KPIs.
-- Review supplier and purchasing group performance.
-- Track invoice exceptions and open items.
-- Maintain a continuous improvement backlog.
+## Project Progress Summary
 
-### Expected Analytics Contribution
+| SAP Activate Phase | Current Repository Status |
+| --- | --- |
+| Discover | Business case complete. |
+| Prepare | Scope and KPI catalog established. |
+| Explore | Process/data model and KPI requirements documented. |
+| Realize | Schema and synthetic process data complete through goods receipt; later finance and project-exception phases remain. |
+| Deploy | Not started. |
+| Run | Conceptual / future analytics use. |
 
-Analytics provides the operational feedback loop after go-live. It helps determine whether the implementation improved procurement visibility, process control, and decision-making.
+## Practical Interpretation
 
-### Example Deliverables
-
-- Run-phase procurement KPI dashboard
-- Supplier performance review pack
-- Invoice exception monitoring report
-- Continuous improvement action list
-
-## Practical Project Interpretation
-
-This repository does not need to reproduce a full enterprise SAP implementation. Instead, it uses SAP Activate as a practical structure for explaining why analytics is needed, how KPIs are selected, how source data is planned, and how SQL analysis can support procurement process improvement.
-
-The most important connection is that each technical deliverable should support a business question and fit into a realistic SAP implementation phase.
+This repository uses SAP Activate as a practical structure for portfolio storytelling. Each technical artifact should support a business question and fit into a realistic SAP implementation phase, while remaining honest about current implementation boundaries.
