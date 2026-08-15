@@ -43,11 +43,12 @@ Completed:
 - Phase 4 invoice and invoice-item generation.
 - Item-level three-way matching and invoice-level matching summary views.
 - Intentional perfect-match, price-mismatch, quantity-mismatch, and missing-goods-receipt scenarios.
-- Phase 1 through Phase 4 validations, including integrity, foreign-key, deterministic regeneration, lifecycle, fulfillment, delivery KPI, invoice arithmetic, matching, and blocking checks.
+- Phase 5 payment-event generation and invoice-level payment-progress derivation.
+- Intentional failed, cancelled, on-hold, split successful payment, and fully paid scenarios.
+- Phase 1 through Phase 5 validations, including integrity, foreign-key, deterministic regeneration, lifecycle, fulfillment, delivery KPI, invoice arithmetic, matching, blocking, payment arithmetic, eligibility, and rollback checks.
 
 Not yet implemented:
 
-- Payment data generation.
 - Change request data generation.
 - Data quality issue generation.
 - Separate SQL analytics query files.
@@ -66,6 +67,8 @@ The current model deliberately separates related but different concepts:
 - Invoice document lifecycle state.
 - Independent invoice blocking state and reason.
 - Derived three-way matching state, calculated from PO, invoice, and eligible posted accepted receipt quantities.
+- Payment-instruction result, such as scheduled, on hold, paid, failed, or cancelled.
+- Derived invoice payment progress, calculated only from successful payment amounts.
 
 This prevents one status field from representing unrelated business meanings. Receipt fulfillment is calculated through SQL views from accepted quantity; it is not manually stored as a purchase order status.
 
@@ -76,6 +79,7 @@ This prevents one status field from representing unrelated business meanings. Re
 - `vw_po_item_delivery_performance`: one row per PO item with fulfillment date and delivery-performance classification.
 - `vw_invoice_item_three_way_match`: one row per non-cancelled invoice item with eligible accepted quantity, cumulative invoiced quantity, quantity and price variances, monetary price impact, and derived matching status.
 - `vw_invoice_matching_summary`: one row per invoice header with eligible, matched, and exception item counts plus `excluded` cancelled headers and `invalid` non-cancelled zero-item headers.
+- `vw_invoice_payment_progress`: one row per invoice header with current payment eligibility, successful paid amount, outstanding amount, successful payment count, latest successful payment date, and derived payment progress.
 
 ## Reproducible Generation
 
@@ -85,7 +89,7 @@ Generate or regenerate the SQLite dataset from the repository root:
 python scripts/generate_data.py --reset
 ```
 
-The generator uses default seed `42`, so the current synthetic dataset is deterministic. It recreates `database/marmara_components.db`, applies the SQLite schema, inserts the synthetic data, and runs integrity, foreign-key, scenario, fulfillment, delivery-performance, invoice, and three-way matching checks.
+The generator uses default seed `42`, so the current synthetic dataset is deterministic. It recreates `database/marmara_components.db`, applies the SQLite schema, inserts the synthetic data, and runs integrity, foreign-key, scenario, fulfillment, delivery-performance, invoice, three-way matching, payment-progress, and adversarial rollback checks.
 
 ## Current Deterministic Dataset Snapshot
 
@@ -105,9 +109,10 @@ Current generated row counts:
 | `goods_receipts` | 10 |
 | `invoices` | 4 |
 | `invoice_items` | 5 |
+| `payments` | 5 |
 | `sap_activate_project_tasks` | 12 |
 
-The later-phase finance and exception tables currently exist but are empty: `payments`, `change_requests`, and `data_quality_issues`.
+The later-phase exception tables currently exist but are empty: `change_requests` and `data_quality_issues`.
 
 Goods receipt facts in the current deterministic synthetic dataset:
 
@@ -145,6 +150,19 @@ Cancelled invoices are excluded at the item matching view, so they do not affect
 
 Phase 4 assumes invoice and PO quantities use the material base unit of measure. It does not implement unit-of-measure conversion, tax, freight, or business matching tolerances beyond numeric floating-point handling. Generated invoice unit prices are limited to two decimal places so Python and SQLite monetary rounding remain deterministic for the implemented dataset.
 
+Current Phase 5 payment-progress results:
+
+- 5 payment instructions or attempts.
+- 2 successful payments against INV-001, totaling TRY 2,770.20.
+- Failed, cancelled, and on-hold payment amounts do not contribute to successful paid amount.
+- INV-001 is fully paid through two successful payment events.
+- INV-002, INV-003, and INV-004 remain unpaid; all three remain blocked by their Phase 4 matching exceptions.
+- Invoice Payment Completion Rate: 1 / 4 = 25.0%.
+- Outstanding Invoice Amount: TRY 1,279.00 and EUR 597.00.
+- Successful Paid Amount: TRY 2,770.20 and EUR 0.00.
+
+Payment rows represent payment instructions or attempts, not invoice-level payment progress. The `payments.payment_status` field therefore does not contain `partially paid`; the `unpaid`, `partially paid`, and `paid` invoice states are derived in `vw_invoice_payment_progress`. Current payment eligibility means that a new successful payment can be accepted now, so a fully paid invoice with no outstanding balance is not eligible. Historical successful payments remain visible if an invoice is blocked or cancelled later; current header state is not used to reconstruct historical eligibility because state history is outside Phase 5. `payment_amount` inherits `invoices.invoice_currency`; Phase 5 does not store a duplicate payment currency or perform FX conversion.
+
 PO Item On-Time In-Full Rate is the primary supplier-performance KPI because it evaluates complete business fulfillment at the PO-item grain and avoids overweighting split deliveries. Receipt Event On-Time Rate is useful as a secondary operational diagnostic because one PO item with multiple receipt events can contribute multiple events.
 
 ## SAP Activate Connection
@@ -160,7 +178,6 @@ The repository uses SAP Activate as a practical project-storytelling structure:
 
 ## Next Steps
 
-1. Payment generation and payment-progress derivation.
-2. Change request and data-quality issue generation.
-3. Separate SQL analytics query files.
-4. Optional dashboard and final portfolio presentation.
+1. Change request and data-quality issue generation.
+2. Separate SQL analytics query files.
+3. Optional dashboard and final portfolio presentation.
