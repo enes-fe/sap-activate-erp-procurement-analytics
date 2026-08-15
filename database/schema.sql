@@ -1,5 +1,7 @@
 PRAGMA foreign_keys = ON;
 
+DROP VIEW IF EXISTS vw_invoice_matching_summary;
+DROP VIEW IF EXISTS vw_invoice_item_three_way_match;
 DROP VIEW IF EXISTS vw_po_item_delivery_performance;
 DROP VIEW IF EXISTS vw_po_fulfillment;
 DROP VIEW IF EXISTS vw_po_item_fulfillment;
@@ -225,13 +227,25 @@ CREATE TABLE invoices (
         CHECK (invoice_received_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     posting_date TEXT
         CHECK (posting_date IS NULL OR posting_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    invoice_currency TEXT NOT NULL
+        CHECK (length(invoice_currency) = 3),
     invoice_total_amount REAL NOT NULL
         CHECK (invoice_total_amount >= 0),
     invoice_status TEXT NOT NULL
-        CHECK (invoice_status IN ('received', 'posted', 'blocked', 'disputed', 'approved', 'paid', 'cancelled')),
+        CHECK (invoice_status IN ('received', 'posted', 'approved', 'disputed', 'cancelled')),
     blocked_flag INTEGER NOT NULL DEFAULT 0
         CHECK (blocked_flag IN (0, 1)),
     block_reason TEXT,
+    CHECK (invoice_received_date >= invoice_date),
+    CHECK (posting_date IS NULL OR posting_date >= invoice_received_date),
+    CHECK (
+        (blocked_flag = 0 AND block_reason IS NULL)
+        OR (
+            blocked_flag = 1
+            AND block_reason IS NOT NULL
+            AND length(trim(block_reason)) > 0
+        )
+    ),
     UNIQUE (vendor_id, invoice_number),
     FOREIGN KEY (vendor_id)
         REFERENCES vendors (vendor_id)
@@ -242,6 +256,8 @@ CREATE TABLE invoices (
 CREATE TABLE invoice_items (
     invoice_item_id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL,
+    invoice_item_number INTEGER NOT NULL
+        CHECK (invoice_item_number > 0),
     po_item_id TEXT NOT NULL,
     invoiced_quantity REAL NOT NULL
         CHECK (invoiced_quantity > 0),
@@ -249,10 +265,13 @@ CREATE TABLE invoice_items (
         CHECK (invoiced_unit_price >= 0),
     invoiced_amount REAL NOT NULL
         CHECK (invoiced_amount >= 0),
-    quantity_variance REAL NOT NULL DEFAULT 0,
-    price_variance REAL NOT NULL DEFAULT 0,
-    matching_status TEXT NOT NULL
-        CHECK (matching_status IN ('matched', 'quantity mismatch', 'price mismatch', 'missing goods receipt', 'blocked', 'under review')),
+    CHECK (
+        ABS(
+            invoiced_amount
+            - ROUND(invoiced_quantity * invoiced_unit_price, 2)
+        ) < 0.000001
+    ),
+    UNIQUE (invoice_id, invoice_item_number),
     FOREIGN KEY (invoice_id)
         REFERENCES invoices (invoice_id)
         ON UPDATE CASCADE
@@ -537,3 +556,162 @@ SELECT
         ELSE NULL
     END AS fulfillment_status
 FROM item_counts;
+
+CREATE VIEW vw_invoice_item_three_way_match AS
+WITH invoice_line_base AS (
+    SELECT
+        ii.invoice_item_id,
+        ii.invoice_id,
+        ii.invoice_item_number,
+        invoice.vendor_id,
+        invoice.invoice_number,
+        invoice.invoice_date,
+        invoice.invoice_received_date,
+        invoice.posting_date,
+        invoice.invoice_currency,
+        invoice.invoice_total_amount,
+        invoice.invoice_status,
+        invoice.blocked_flag,
+        invoice.block_reason,
+        ii.po_item_id,
+        poi.po_id,
+        po.po_number,
+        po.vendor_id AS po_vendor_id,
+        po.document_currency AS po_currency,
+        po.po_lifecycle_status,
+        poi.po_item_number,
+        poi.po_item_lifecycle_status,
+        poi.ordered_quantity,
+        poi.unit_price AS po_unit_price,
+        ii.invoiced_quantity,
+        ii.invoiced_unit_price,
+        ii.invoiced_amount,
+        COALESCE(
+            (
+                SELECT SUM(gr.accepted_quantity)
+                FROM goods_receipts AS gr
+                WHERE gr.po_item_id = ii.po_item_id
+                    AND gr.receipt_status = 'posted'
+                    AND gr.receipt_date <= invoice.invoice_received_date
+            ),
+            0
+        ) AS eligible_posted_accepted_quantity
+    FROM invoice_items AS ii
+    JOIN invoices AS invoice
+        ON invoice.invoice_id = ii.invoice_id
+    JOIN purchase_order_items AS poi
+        ON poi.po_item_id = ii.po_item_id
+    JOIN purchase_orders AS po
+        ON po.po_id = poi.po_id
+    WHERE invoice.invoice_status <> 'cancelled'
+),
+cumulative_invoice_quantities AS (
+    SELECT
+        line.*,
+        SUM(line.invoiced_quantity) OVER (
+            PARTITION BY line.po_item_id
+            ORDER BY
+                line.invoice_received_date,
+                line.invoice_id,
+                line.invoice_item_number,
+                line.invoice_item_id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS cumulative_non_cancelled_invoiced_quantity
+    FROM invoice_line_base AS line
+),
+variance_values AS (
+    SELECT
+        cumulative.*,
+        (
+            cumulative.cumulative_non_cancelled_invoiced_quantity
+            - cumulative.eligible_posted_accepted_quantity
+        ) AS quantity_variance,
+        ROUND(
+            cumulative.invoiced_unit_price - cumulative.po_unit_price,
+            2
+        ) AS price_variance
+    FROM cumulative_invoice_quantities AS cumulative
+)
+SELECT
+    variance.*,
+    ROUND(
+        variance.price_variance * variance.invoiced_quantity,
+        2
+    ) AS monetary_price_variance_impact,
+    CASE
+        WHEN variance.eligible_posted_accepted_quantity <= 0.000001
+        THEN 'missing goods receipt'
+        WHEN (
+            variance.cumulative_non_cancelled_invoiced_quantity
+                - variance.eligible_posted_accepted_quantity > 0.000001
+            OR variance.cumulative_non_cancelled_invoiced_quantity
+                - variance.ordered_quantity > 0.000001
+        )
+            AND ABS(variance.price_variance) > 0
+        THEN 'quantity and price mismatch'
+        WHEN variance.cumulative_non_cancelled_invoiced_quantity
+                - variance.eligible_posted_accepted_quantity > 0.000001
+            OR variance.cumulative_non_cancelled_invoiced_quantity
+                - variance.ordered_quantity > 0.000001
+        THEN 'quantity mismatch'
+        WHEN ABS(variance.price_variance) > 0
+        THEN 'price mismatch'
+        ELSE 'matched'
+    END AS matching_status
+FROM variance_values AS variance;
+
+CREATE VIEW vw_invoice_matching_summary AS
+WITH invoice_item_counts AS (
+    SELECT
+        invoice.invoice_id,
+        invoice.vendor_id,
+        invoice.invoice_date,
+        invoice.invoice_currency,
+        invoice.invoice_total_amount,
+        invoice.invoice_status,
+        invoice.blocked_flag,
+        COUNT(match.invoice_item_id) AS total_item_count,
+        SUM(
+            CASE
+                WHEN match.matching_status = 'matched' THEN 1
+                ELSE 0
+            END
+        ) AS matched_item_count,
+        SUM(
+            CASE
+                WHEN match.invoice_item_id IS NOT NULL
+                    AND match.matching_status <> 'matched'
+                THEN 1
+                ELSE 0
+            END
+        ) AS exception_item_count
+    FROM invoices AS invoice
+    LEFT JOIN vw_invoice_item_three_way_match AS match
+        ON match.invoice_id = invoice.invoice_id
+    GROUP BY
+        invoice.invoice_id,
+        invoice.vendor_id,
+        invoice.invoice_date,
+        invoice.invoice_currency,
+        invoice.invoice_total_amount,
+        invoice.invoice_status,
+        invoice.blocked_flag
+)
+SELECT
+    invoice_id,
+    vendor_id,
+    invoice_date,
+    invoice_currency,
+    invoice_total_amount,
+    invoice_status,
+    blocked_flag,
+    total_item_count,
+    matched_item_count,
+    exception_item_count,
+    CASE
+        WHEN invoice_status = 'cancelled' THEN 'excluded'
+        WHEN total_item_count = 0 THEN 'invalid'
+        WHEN exception_item_count = 0 THEN 'matched'
+        ELSE 'exception'
+    END AS invoice_matching_status
+FROM invoice_item_counts;

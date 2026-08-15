@@ -11,22 +11,20 @@ The repository is a simplified analytical simulation for Marmara Components, a f
 Implemented:
 
 - 16 persisted SQLite tables.
-- Three derived analytical views.
-- Deterministic synthetic data generation through Phase 3.
-- Master data, purchase requisitions, purchase orders, goods receipts, and SAP Activate project tasks.
-- Integrity, foreign-key, lifecycle, fulfillment, delivery-performance, and deterministic regeneration checks.
+- Five derived analytical views.
+- Deterministic synthetic data generation through Phase 4.
+- Master data, purchase requisitions, purchase orders, goods receipts, invoices, invoice items, and SAP Activate project tasks.
+- Integrity, foreign-key, lifecycle, fulfillment, delivery-performance, invoice matching, blocking, and deterministic regeneration checks.
 
 Tables implemented but currently empty for later phases:
 
-- `invoices`
-- `invoice_items`
 - `payments`
 - `change_requests`
 - `data_quality_issues`
 
 Not yet implemented:
 
-- Invoice, invoice item, payment, change request, and data quality issue data generation.
+- Payment, change request, and data quality issue data generation.
 - Separate SQL analytics query files.
 - Dashboard assets.
 
@@ -39,6 +37,7 @@ Not yet implemented:
 | Explicit transaction grain | Header, item, and event tables have clear grains for reliable KPI logic. |
 | Item-level spend and fulfillment | `purchase_order_items` is the main grain for spend, quantity, delivery, and supplier reliability analytics. |
 | Stored lifecycle, derived progress | PO and PO-item lifecycle are stored; fulfillment and delivery performance are derived from receipt facts. |
+| Independent invoice concerns | Invoice lifecycle and blocking are stored independently; three-way matching is derived from PO, receipt, and invoice facts. |
 | SQL-friendly structure | The schema uses readable SQLite tables, constraints, foreign keys, and views. |
 
 ## 4. Persisted Tables
@@ -55,8 +54,8 @@ Not yet implemented:
 | `purchase_orders` | Transaction header | Supplier-facing purchasing documents linked to vendors, plants, and purchasing groups. |
 | `purchase_order_items` | Transaction item | PO line-level spend, quantity, material, delivery expectation, and lifecycle. |
 | `goods_receipts` | Transaction event | Receipt events against PO items for physical receipt, acceptance, rejection, and delivery analysis. |
-| `invoices` | Transaction header | Future supplier invoice header records. |
-| `invoice_items` | Transaction item | Future invoice lines linked to PO items for matching analysis. |
+| `invoices` | Transaction header | Supplier invoice lifecycle, currency, totals, and independent blocking information. |
+| `invoice_items` | Transaction item | Raw supplier invoice lines linked to PO items. |
 | `payments` | Transaction event | Future payment records linked to invoices. |
 | `sap_activate_project_tasks` | Project tracking | SAP Activate phase tasks, ownership, status, readiness weight, and completion. |
 | `change_requests` | Project tracking | Future project scope or requirement changes. |
@@ -103,7 +102,7 @@ Important columns:
 | `planned_delivery_date` | Expected delivery date used in delivery KPIs. |
 | `po_item_lifecycle_status` | Stored lifecycle state: `active`, `cancelled`, or `closed`. |
 
-Receipt progress and future invoice progress are derived separately. They are not stored as PO-item lifecycle values.
+Receipt progress and invoice matching are derived separately. They are not stored as PO-item lifecycle values.
 
 ### `goods_receipts`
 
@@ -131,9 +130,21 @@ Status-aware quantity rules:
 
 Rejected quantity remains open against the order; it does not close the PO item.
 
-### Future Finance and Exception Tables
+### `invoices`
 
-The current schema includes `invoices`, `invoice_items`, `payments`, `change_requests`, and `data_quality_issues`, but the deterministic generator currently leaves these tables empty. Their structures support later invoice matching, payment analysis, project exception tracking, and readiness analysis.
+Invoice header table. `invoice_status` represents document lifecycle only: `received`, `posted`, `approved`, `disputed`, or `cancelled`. Blocking is stored independently through `blocked_flag` and `block_reason`. Payment state is not stored on the invoice and will later be derived from `payments`.
+
+`invoice_currency` must agree with the document currency of every referenced PO. `invoice_total_amount` is the sum of net invoice-item amounts; Phase 4 does not model tax or freight.
+
+### `invoice_items`
+
+Raw invoice-item table. Each row has an item number unique within its invoice, references one PO item, and stores invoiced quantity, unit price, and net amount.
+
+Quantity variance, price variance, and matching status are deliberately not stored in this table. They are derived in `vw_invoice_item_three_way_match` so they cannot drift away from PO, GR, or invoice facts.
+
+### Later Finance and Exception Tables
+
+The current schema includes `payments`, `change_requests`, and `data_quality_issues`, but the deterministic generator leaves these tables empty. Their structures support later payment analysis, project exception tracking, and readiness analysis.
 
 ## 6. Primary Keys and Relationships
 
@@ -171,8 +182,8 @@ Delete behavior:
 | `purchase_orders` | One row per purchase order header. | Supports vendor, plant, purchasing group, approval timing, and lifecycle analysis. |
 | `purchase_order_items` | One row per purchase order line item. | Main grain for spend, delivery expectation, open quantity, and supplier reliability. |
 | `goods_receipts` | One row per receipt event for a PO item. | Multiple receipt events can fulfill one PO item. |
-| `invoices` | One row per supplier invoice header. | Future invoice status and payment readiness analysis. |
-| `invoice_items` | One row per invoice line matched to a PO item. | Future three-way matching analysis. |
+| `invoices` | One row per supplier invoice header. | Invoice lifecycle, currency, total, blocking, and header-level matching analysis. |
+| `invoice_items` | One row per invoice line linked to a PO item. | Raw quantity, unit price, and amount facts for three-way matching. |
 | `payments` | One row per payment event for an invoice. | Future payment timing and completion analysis. |
 | `sap_activate_project_tasks` | One row per project task or readiness activity. | Phase, workstream, completion, and readiness scoring. |
 | `change_requests` | One row per project change request. | Future scope and requirement change analysis. |
@@ -180,6 +191,8 @@ Delete behavior:
 | `vw_po_item_fulfillment` | One row per PO item. | Derived item fulfillment and open quantity. |
 | `vw_po_fulfillment` | One row per PO header. | Derived header fulfillment from active item statuses. |
 | `vw_po_item_delivery_performance` | One row per PO item. | Derived item-level delivery performance. |
+| `vw_invoice_item_three_way_match` | One row per non-cancelled invoice item. | Derived PO-GR-invoice quantity and price matching. |
+| `vw_invoice_matching_summary` | One row per invoice header. | Header-level matching rollup with explicit excluded and invalid states. |
 
 ## 8. Analytical Views
 
@@ -240,6 +253,55 @@ Delivery-performance statuses:
 
 The reusable view does not contain a reporting-date filter. Reporting queries should apply their own date filter, for example by selecting PO items with `planned_delivery_date` on or before a selected reporting date.
 
+### `vw_invoice_item_three_way_match`
+
+Grain: one row per non-cancelled invoice item.
+
+This view is the single source of three-way matching business logic. It exposes PO quantity and price, eligible accepted goods receipt quantity, cumulative non-cancelled invoiced quantity, invoice quantity and price, quantity variance, unit-price variance, monetary price variance impact, and matching status.
+
+Cancelled invoices are excluded directly from this view. This single eligibility boundary prevents cancelled quantities from entering cumulative invoiced quantity, matched or exception item counts, and the Three-Way Matching Exception Rate denominator.
+
+Eligible accepted quantity is the sum of `accepted_quantity` for the same PO item where:
+
+- `receipt_status = 'posted'`.
+- `receipt_date <= invoice_received_date`.
+
+Reversed and under-review receipts do not contribute. The invoice-received-date cutoff prevents a later receipt from retroactively hiding the match state that existed when the invoice was received.
+
+Cumulative invoiced quantity is ordered by:
+
+1. `invoice_received_date`
+2. `invoice_id`
+3. `invoice_item_number`
+4. `invoice_item_id`
+
+`quantity_variance` is cumulative non-cancelled invoiced quantity minus eligible posted accepted quantity. A positive value represents over-invoicing. Zero is an exact quantity match. A negative value means accepted goods are not yet fully invoiced and is not an exception by itself.
+
+`price_variance` is the invoice unit price minus the PO unit price, rounded to two decimals. `monetary_price_variance_impact` multiplies this unit-price variance by the current invoice-item quantity.
+
+Matching precedence:
+
+1. Missing goods receipt.
+2. Quantity and price mismatch.
+3. Quantity mismatch.
+4. Price mismatch.
+5. Matched.
+
+### `vw_invoice_matching_summary`
+
+Grain: one row per invoice header.
+
+This view aggregates `vw_invoice_item_three_way_match` and does not repeat item matching logic. It provides total, matched, and exception item counts while keeping every invoice header visible for auditability.
+
+Header matching statuses:
+
+- `excluded`: cancelled invoice; all matching item counts are zero.
+- `invalid`: non-cancelled invoice with zero eligible invoice items.
+- `matched`: at least one eligible item and no exceptions.
+- `exception`: at least one eligible item has a matching exception.
+
+Excluded and invalid headers do not contribute matched-item, exception-item, or Three-Way Matching Exception Rate calculations.
+
 ## 9. Relationship and Design Rationale
 
 The model follows a simplified procure-to-pay analytical flow:
@@ -251,9 +313,13 @@ The model follows a simplified procure-to-pay analytical flow:
 - Rejected quantity remains open against the order.
 - PO and PO-item lifecycle are stored.
 - Receipt fulfillment is derived from accepted posted quantity.
-- Invoice progress will later be derived separately from invoice and invoice item records.
+- Invoice lifecycle and blocking are stored independently.
+- Three-way matching is derived at invoice-item grain and then rolled up to invoice grain.
+- Payment progress will later be derived from payment records rather than stored on `invoice_status`.
 
-This design keeps delivery reliability, open quantity, document lifecycle, receipt workflow, and future invoice matching logically separate.
+This design keeps delivery reliability, open quantity, document lifecycle, receipt workflow, invoice matching, blocking, and future payment progress logically separate.
+
+Phase 4 assumes PO, receipt, and invoice quantities use the material base unit of measure. Unit-of-measure conversion is not implemented. Tax, freight, and business matching tolerances are also outside scope. Generated invoice unit prices use no more than two decimal places. Price comparison uses two-decimal monetary values, and quantity comparison uses floating-point tolerance only.
 
 ## 10. Mermaid ERD
 
@@ -375,6 +441,7 @@ erDiagram
         string invoice_number
         date invoice_date
         date invoice_received_date
+        string invoice_currency
         decimal invoice_total_amount
         string invoice_status
         boolean blocked_flag
@@ -383,10 +450,11 @@ erDiagram
     invoice_items {
         string invoice_item_id PK
         string invoice_id FK
+        int invoice_item_number
         string po_item_id FK
         decimal invoiced_quantity
+        decimal invoiced_unit_price
         decimal invoiced_amount
-        string matching_status
     }
 
     payments {
@@ -425,7 +493,7 @@ erDiagram
     }
 ```
 
-The ERD shows persisted tables only. The derived analytical views are `vw_po_item_fulfillment`, `vw_po_fulfillment`, and `vw_po_item_delivery_performance`.
+The ERD shows persisted tables only. The derived analytical views are `vw_po_item_fulfillment`, `vw_po_fulfillment`, `vw_po_item_delivery_performance`, `vw_invoice_item_three_way_match`, and `vw_invoice_matching_summary`.
 
 ## 11. KPI Group to Source Object Mapping
 
@@ -439,5 +507,5 @@ The ERD shows persisted tables only. The derived analytical views are `vw_po_ite
 | Supplier Performance | Receipt Event On-Time Rate | `goods_receipts`, `purchase_order_items`, `purchase_orders`, `vendors` | Implemented in Phase 3 validation logic. |
 | Supplier Performance | Average Delivery Delay | `goods_receipts`, `purchase_order_items`, `vendors` | Implemented in Phase 3 validation logic. |
 | Procurement Operations | Open PO Quantity | `vw_po_item_fulfillment` | Implemented in Phase 3 view logic. |
-| Invoice and Matching | Invoice mismatch KPIs | `purchase_order_items`, `goods_receipts`, `invoices`, `invoice_items` | Planned for later phases. |
+| Invoice and Matching | Three-Way Matching Exception Rate and Blocked Invoice Count | `purchase_order_items`, `goods_receipts`, `invoices`, `invoice_items`, `vw_invoice_item_three_way_match`, `vw_invoice_matching_summary` | Implemented in Phase 4 view and validation logic. |
 | SAP Activate Readiness | Data readiness and go-live outputs | `sap_activate_project_tasks`, `change_requests`, `data_quality_issues` | Partially modeled; data generation planned for later phases. |

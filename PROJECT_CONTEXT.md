@@ -58,11 +58,13 @@ The current SQLite schema contains these 16 persisted tables:
 - `change_requests`
 - `data_quality_issues`
 
-The current schema also contains three analytical views:
+The current schema also contains five analytical views:
 
 - `vw_po_item_fulfillment`
 - `vw_po_fulfillment`
 - `vw_po_item_delivery_performance`
+- `vw_invoice_item_three_way_match`
+- `vw_invoice_matching_summary`
 
 Current generated row counts:
 
@@ -78,9 +80,11 @@ Current generated row counts:
 | `purchase_orders` | 8 |
 | `purchase_order_items` | 15 |
 | `goods_receipts` | 10 |
+| `invoices` | 4 |
+| `invoice_items` | 5 |
 | `sap_activate_project_tasks` | 12 |
 
-The following tables currently exist for later phases but are empty: `invoices`, `invoice_items`, `payments`, `change_requests`, and `data_quality_issues`.
+The following tables currently exist for later phases but are empty: `payments`, `change_requests`, and `data_quality_issues`.
 
 ## 6. Important Architecture Decision
 
@@ -91,9 +95,11 @@ The pre-Phase 3 refactor separated several concepts that should not be compresse
 - Receipt workflow: stored on `goods_receipts.receipt_status`.
 - Quantitative receipt facts: stored as received, accepted, and rejected quantities.
 - Derived fulfillment: calculated by SQL views from posted accepted quantities.
-- Future invoice progress: to be derived separately when invoice records are generated.
+- Invoice document lifecycle: stored on `invoices.invoice_status`.
+- Invoice blocking: stored independently through `blocked_flag` and `block_reason`.
+- Three-way matching: derived by SQL views from PO, invoice, and eligible posted accepted receipt quantities.
 
-This keeps document lifecycle, operational receipt workflow, quantity facts, fulfillment progress, and invoice progress independently understandable. It also prevents one PO status field from representing lifecycle, delivery progress, timeliness, and invoice progress at the same time.
+This keeps document lifecycle, operational receipt workflow, quantity facts, fulfillment progress, invoice matching, blocking, and future payment progress independently understandable. In particular, a posted invoice may be blocked without overloading `invoice_status`, and future payment state will be derived from the `payments` table.
 
 ## 7. KPI Decision
 
@@ -121,21 +127,34 @@ Current deterministic Phase 3 validation results, using reporting date `2026-03-
 
 These are validation results for the synthetic dataset, not business targets or benchmarks.
 
+Current deterministic Phase 4 matching results:
+
+- 5 invoice items: 2 matched and 3 exceptions.
+- 1 price mismatch.
+- 1 quantity mismatch caused by 40 invoiced units against 38 eligible accepted units.
+- 1 missing-goods-receipt exception.
+- Three-Way Matching Exception Rate: 60.0%.
+- Blocked Invoice Count: 3.
+
+Eligible accepted quantity includes only posted goods receipts for the same PO item with a receipt date on or before the invoice received date.
+
+Cancelled invoices are excluded from item-level matching and matching KPI denominators. Their headers remain visible in the invoice summary as `excluded`; non-cancelled zero-item headers are classified as `invalid`.
+
 ## 8. Current Roadmap Status
 
 | Step | Status | Notes |
 | --- | --- | --- |
 | Step 1: Foundation | Completed | Project scope, README, business case, KPI catalog, SAP Activate mapping, and project context exist. |
-| Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and three analytical views. |
-| Step 3: Synthetic data | Phase 1-3 completed | Master data, purchase requisitions, purchase orders, PR-to-PO conversion, direct PO scenarios, goods receipts, and SAP Activate project tasks are generated. Finance and project-exception tables remain for later phases. |
-| Step 4: SQL analytics | Partially started | Fulfillment and delivery-performance logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
-| Step 5: Documentation | In progress | Current work aligns documentation with the pre-Phase 3 model refactor and Phase 3 goods receipt implementation. |
+| Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and five analytical views. |
+| Step 3: Synthetic data | Phase 1-4 completed | Master data, purchase requisitions, purchase orders, PR-to-PO conversion, direct PO scenarios, goods receipts, invoices, invoice items, and SAP Activate project tasks are generated. Payments and project-exception tables remain for later phases. |
+| Step 4: SQL analytics | Partially started | Fulfillment, delivery-performance, and invoice matching logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
+| Step 5: Documentation | In progress | Current work aligns documentation with the Phase 4 invoice and three-way matching implementation. |
 | Step 6: Dashboard | Not started / optional | Dashboard tools should wait until core SQL outputs are stable. |
 
 Latest completed technical milestone:
 
 ```text
-Phase 3 goods receipt and delivery-performance analytics
+Phase 4 invoice generation and three-way matching
 ```
 
 ## 9. Current Completed Scope
@@ -151,16 +170,19 @@ Completed:
 - PR-to-PO conversion scenarios.
 - Direct PO scenarios.
 - Goods receipt generation.
+- Invoice and invoice-item generation.
+- Perfect-match, price-mismatch, quantity-mismatch, and missing-goods-receipt scenarios.
 - PO lifecycle and fulfillment separation.
 - Fulfillment views.
 - PO-item delivery-performance view.
-- Phase 1, Phase 2, and Phase 3 validations.
+- Item-level three-way matching view.
+- Invoice-level matching summary view.
+- Independent invoice lifecycle and blocking state.
+- Phase 1 through Phase 4 validations.
 - Integrity, foreign-key, and deterministic regeneration checks.
 
 Not yet implemented:
 
-- Invoice data generation.
-- Invoice item data generation.
 - Payment data generation.
 - Change request data generation.
 - Data quality issue generation.
@@ -168,6 +190,8 @@ Not yet implemented:
 - Dashboard implementation.
 - Final portfolio screenshots.
 - SAP API or SAP Learning Hub integration.
+
+Phase 4 matching assumes invoice and PO quantities use the material base unit of measure. Unit-of-measure conversion, tax, freight, and business matching tolerances are not modeled. Generated invoice unit prices use no more than two decimal places. Price equality uses two-decimal monetary comparison, while quantity comparisons use numeric floating-point tolerance.
 
 ## 10. Development Principles
 

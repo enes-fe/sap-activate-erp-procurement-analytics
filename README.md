@@ -40,11 +40,13 @@ Completed:
 - Pre-Phase 3 refactor separating PO lifecycle state from fulfillment state.
 - Phase 3 goods receipt generation and delivery-performance analytics.
 - Fulfillment views and PO-item delivery-performance view.
-- Phase 1, Phase 2, and Phase 3 validations, including integrity, foreign-key, deterministic regeneration, lifecycle, fulfillment, and delivery KPI checks.
+- Phase 4 invoice and invoice-item generation.
+- Item-level three-way matching and invoice-level matching summary views.
+- Intentional perfect-match, price-mismatch, quantity-mismatch, and missing-goods-receipt scenarios.
+- Phase 1 through Phase 4 validations, including integrity, foreign-key, deterministic regeneration, lifecycle, fulfillment, delivery KPI, invoice arithmetic, matching, and blocking checks.
 
 Not yet implemented:
 
-- Invoice and invoice-item data generation.
 - Payment data generation.
 - Change request data generation.
 - Data quality issue generation.
@@ -61,7 +63,9 @@ The current model deliberately separates related but different concepts:
 - Receipt-event workflow state, such as posted, under review, or reversed.
 - Quantity facts, including received, accepted, rejected, and open quantities.
 - Derived fulfillment state, calculated from posted accepted receipt quantities.
-- Future invoice progress, which will be derived separately when invoice data is implemented.
+- Invoice document lifecycle state.
+- Independent invoice blocking state and reason.
+- Derived three-way matching state, calculated from PO, invoice, and eligible posted accepted receipt quantities.
 
 This prevents one status field from representing unrelated business meanings. Receipt fulfillment is calculated through SQL views from accepted quantity; it is not manually stored as a purchase order status.
 
@@ -70,6 +74,8 @@ This prevents one status field from representing unrelated business meanings. Re
 - `vw_po_item_fulfillment`: one row per PO item with received, accepted, rejected, under-review, open quantity, and derived fulfillment status.
 - `vw_po_fulfillment`: one row per PO header with item-level fulfillment rolled up into header-level fulfillment status.
 - `vw_po_item_delivery_performance`: one row per PO item with fulfillment date and delivery-performance classification.
+- `vw_invoice_item_three_way_match`: one row per non-cancelled invoice item with eligible accepted quantity, cumulative invoiced quantity, quantity and price variances, monetary price impact, and derived matching status.
+- `vw_invoice_matching_summary`: one row per invoice header with eligible, matched, and exception item counts plus `excluded` cancelled headers and `invalid` non-cancelled zero-item headers.
 
 ## Reproducible Generation
 
@@ -79,7 +85,7 @@ Generate or regenerate the SQLite dataset from the repository root:
 python scripts/generate_data.py --reset
 ```
 
-The generator uses default seed `42`, so the current synthetic dataset is deterministic. It recreates `database/marmara_components.db`, applies the SQLite schema, inserts the synthetic data, and runs integrity, foreign-key, scenario, fulfillment, and delivery-performance checks.
+The generator uses default seed `42`, so the current synthetic dataset is deterministic. It recreates `database/marmara_components.db`, applies the SQLite schema, inserts the synthetic data, and runs integrity, foreign-key, scenario, fulfillment, delivery-performance, invoice, and three-way matching checks.
 
 ## Current Deterministic Dataset Snapshot
 
@@ -97,9 +103,11 @@ Current generated row counts:
 | `purchase_orders` | 8 |
 | `purchase_order_items` | 15 |
 | `goods_receipts` | 10 |
+| `invoices` | 4 |
+| `invoice_items` | 5 |
 | `sap_activate_project_tasks` | 12 |
 
-The downstream finance and exception tables currently exist but are empty: `invoices`, `invoice_items`, `payments`, `change_requests`, and `data_quality_issues`.
+The later-phase finance and exception tables currently exist but are empty: `payments`, `change_requests`, and `data_quality_issues`.
 
 Goods receipt facts in the current deterministic synthetic dataset:
 
@@ -121,6 +129,22 @@ Current delivery KPI validation results, using reporting date `2026-03-31`:
 
 These values validate the current deterministic synthetic scenario. They are not universal procurement benchmarks.
 
+Current Phase 4 invoice matching results:
+
+- 4 invoice headers and 5 invoice items.
+- 2 matched invoice items.
+- 1 price mismatch.
+- 1 quantity mismatch caused by 40 invoiced units against 38 posted accepted units.
+- 1 missing-goods-receipt exception against an active PO item.
+- Three-Way Matching Exception Rate: 3 / 5 = 60.0%.
+- Blocked Invoice Count: 3.
+
+Eligible receipt quantity is calculated as posted accepted quantity for the same PO item with `receipt_date` on or before `invoice_received_date`. Later receipts do not retroactively change the match state at invoice receipt.
+
+Cancelled invoices are excluded at the item matching view, so they do not affect cumulative invoiced quantity or invoice-matching KPIs. Their headers remain visible in the summary with status `excluded`. A non-cancelled invoice with no items remains visible with status `invalid` and is not treated as matched or as an exception.
+
+Phase 4 assumes invoice and PO quantities use the material base unit of measure. It does not implement unit-of-measure conversion, tax, freight, or business matching tolerances beyond numeric floating-point handling. Generated invoice unit prices are limited to two decimal places so Python and SQLite monetary rounding remain deterministic for the implemented dataset.
+
 PO Item On-Time In-Full Rate is the primary supplier-performance KPI because it evaluates complete business fulfillment at the PO-item grain and avoids overweighting split deliveries. Receipt Event On-Time Rate is useful as a secondary operational diagnostic because one PO item with multiple receipt events can contribute multiple events.
 
 ## SAP Activate Connection
@@ -136,9 +160,7 @@ The repository uses SAP Activate as a practical project-storytelling structure:
 
 ## Next Steps
 
-1. Phase 4 invoice and invoice-item generation.
-2. Three-way matching and invoice exception analytics.
-3. Payment generation.
-4. Change request and data-quality issue generation.
-5. Separate SQL analytics query files.
-6. Optional dashboard and final portfolio presentation.
+1. Payment generation and payment-progress derivation.
+2. Change request and data-quality issue generation.
+3. Separate SQL analytics query files.
+4. Optional dashboard and final portfolio presentation.
