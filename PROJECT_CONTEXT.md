@@ -58,13 +58,14 @@ The current SQLite schema contains these 16 persisted tables:
 - `change_requests`
 - `data_quality_issues`
 
-The current schema also contains five analytical views:
+The current schema also contains six analytical views:
 
 - `vw_po_item_fulfillment`
 - `vw_po_fulfillment`
 - `vw_po_item_delivery_performance`
 - `vw_invoice_item_three_way_match`
 - `vw_invoice_matching_summary`
+- `vw_invoice_payment_progress`
 
 Current generated row counts:
 
@@ -82,9 +83,10 @@ Current generated row counts:
 | `goods_receipts` | 10 |
 | `invoices` | 4 |
 | `invoice_items` | 5 |
+| `payments` | 5 |
 | `sap_activate_project_tasks` | 12 |
 
-The following tables currently exist for later phases but are empty: `payments`, `change_requests`, and `data_quality_issues`.
+The following tables currently exist for later phases but are empty: `change_requests` and `data_quality_issues`.
 
 ## 6. Important Architecture Decision
 
@@ -98,8 +100,10 @@ The pre-Phase 3 refactor separated several concepts that should not be compresse
 - Invoice document lifecycle: stored on `invoices.invoice_status`.
 - Invoice blocking: stored independently through `blocked_flag` and `block_reason`.
 - Three-way matching: derived by SQL views from PO, invoice, and eligible posted accepted receipt quantities.
+- Payment instruction or attempt result: stored on `payments.payment_status`.
+- Invoice payment progress: derived from successful payment amounts through `vw_invoice_payment_progress`.
 
-This keeps document lifecycle, operational receipt workflow, quantity facts, fulfillment progress, invoice matching, blocking, and future payment progress independently understandable. In particular, a posted invoice may be blocked without overloading `invoice_status`, and future payment state will be derived from the `payments` table.
+This keeps document lifecycle, operational receipt workflow, quantity facts, fulfillment progress, invoice matching, blocking, payment-attempt result, current payment eligibility, and invoice payment progress independently understandable. In particular, a posted invoice may be blocked without overloading `invoice_status`, and `partially paid` is derived at invoice grain rather than stored as a payment-event status.
 
 ## 7. KPI Decision
 
@@ -140,21 +144,33 @@ Eligible accepted quantity includes only posted goods receipts for the same PO i
 
 Cancelled invoices are excluded from item-level matching and matching KPI denominators. Their headers remain visible in the invoice summary as `excluded`; non-cancelled zero-item headers are classified as `invalid`.
 
+Current deterministic Phase 5 payment results:
+
+- 5 payment instructions or attempts.
+- 2 successful payments against INV-001, totaling TRY 2,770.20.
+- INV-001 is fully paid; INV-002, INV-003, and INV-004 are unpaid.
+- Failed, cancelled, scheduled, and on-hold payments contribute zero to successful paid amount.
+- Invoice Payment Completion Rate: 1 / 4 = 25.0%.
+- Outstanding Invoice Amount: TRY 1,279.00 and EUR 597.00.
+- Successful Paid Amount: TRY 2,770.20 and EUR 0.00.
+
+Payment amount inherits invoice currency. The model does not duplicate currency on payment rows or combine different currencies in amount KPIs.
+
 ## 8. Current Roadmap Status
 
 | Step | Status | Notes |
 | --- | --- | --- |
 | Step 1: Foundation | Completed | Project scope, README, business case, KPI catalog, SAP Activate mapping, and project context exist. |
-| Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and five analytical views. |
-| Step 3: Synthetic data | Phase 1-4 completed | Master data, purchase requisitions, purchase orders, PR-to-PO conversion, direct PO scenarios, goods receipts, invoices, invoice items, and SAP Activate project tasks are generated. Payments and project-exception tables remain for later phases. |
-| Step 4: SQL analytics | Partially started | Fulfillment, delivery-performance, and invoice matching logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
-| Step 5: Documentation | In progress | Current work aligns documentation with the Phase 4 invoice and three-way matching implementation. |
+| Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and six analytical views. |
+| Step 3: Synthetic data | Phase 1-5 completed | Master data, requisitions, purchase orders, goods receipts, invoices, invoice items, payments, and SAP Activate project tasks are generated. Project-exception tables remain for later phases. |
+| Step 4: SQL analytics | Partially started | Fulfillment, delivery-performance, invoice matching, and payment-progress logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
+| Step 5: Documentation | In progress | Current work aligns documentation with the Phase 5 payment-progress implementation. |
 | Step 6: Dashboard | Not started / optional | Dashboard tools should wait until core SQL outputs are stable. |
 
 Latest completed technical milestone:
 
 ```text
-Phase 4 invoice generation and three-way matching
+Phase 5 payment generation and payment-progress analytics
 ```
 
 ## 9. Current Completed Scope
@@ -177,13 +193,16 @@ Completed:
 - PO-item delivery-performance view.
 - Item-level three-way matching view.
 - Invoice-level matching summary view.
+- Deterministic payment instruction and attempt generation.
+- Invoice-level payment-progress view.
+- Current payment-eligibility derivation.
 - Independent invoice lifecycle and blocking state.
-- Phase 1 through Phase 4 validations.
+- Independent payment-event result and invoice payment-progress state.
+- Phase 1 through Phase 5 validations.
 - Integrity, foreign-key, and deterministic regeneration checks.
 
 Not yet implemented:
 
-- Payment data generation.
 - Change request data generation.
 - Data quality issue generation.
 - Separate SQL analytics query files.
@@ -192,6 +211,8 @@ Not yet implemented:
 - SAP API or SAP Learning Hub integration.
 
 Phase 4 matching assumes invoice and PO quantities use the material base unit of measure. Unit-of-measure conversion, tax, freight, and business matching tolerances are not modeled. Generated invoice unit prices use no more than two decimal places. Price equality uses two-decimal monetary comparison, while quantity comparisons use numeric floating-point tolerance.
+
+Phase 5 treats each payment row as one payment instruction or attempt in its current or final state. Only `paid` rows contribute to successful paid amount. Payment progress is derived as `unpaid`, `partially paid`, or `paid` at invoice grain. Current payment eligibility means a new successful payment can be accepted now and therefore also requires positive outstanding balance. Historical payment-fact validation is separate from new-payment candidate eligibility: later blocking or cancellation does not invalidate an existing successful payment, and current header state is not used to reconstruct historical eligibility because state history is not modeled. Cross-table and cumulative payment rules are enforced by deterministic Python validations, while local row invariants remain schema constraints. No database triggers are used.
 
 ## 10. Development Principles
 

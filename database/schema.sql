@@ -1,5 +1,6 @@
 PRAGMA foreign_keys = ON;
 
+DROP VIEW IF EXISTS vw_invoice_payment_progress;
 DROP VIEW IF EXISTS vw_invoice_matching_summary;
 DROP VIEW IF EXISTS vw_invoice_item_three_way_match;
 DROP VIEW IF EXISTS vw_po_item_delivery_performance;
@@ -285,6 +286,8 @@ CREATE TABLE invoice_items (
 CREATE TABLE payments (
     payment_id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL,
+    payment_status_date TEXT NOT NULL
+        CHECK (payment_status_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     payment_date TEXT
         CHECK (payment_date IS NULL OR payment_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     payment_amount REAL NOT NULL
@@ -292,8 +295,25 @@ CREATE TABLE payments (
     payment_method TEXT NOT NULL
         CHECK (payment_method IN ('bank transfer', 'check', 'card', 'other')),
     payment_status TEXT NOT NULL
-        CHECK (payment_status IN ('scheduled', 'paid', 'partially paid', 'failed', 'cancelled', 'on hold')),
-    clearing_reference TEXT,
+        CHECK (payment_status IN ('scheduled', 'paid', 'failed', 'cancelled', 'on hold')),
+    clearing_reference TEXT UNIQUE,
+    CHECK (
+        ABS(payment_amount - ROUND(payment_amount, 2)) < 0.000001
+    ),
+    CHECK (
+        (
+            payment_status = 'paid'
+            AND payment_date IS NOT NULL
+            AND payment_status_date = payment_date
+            AND clearing_reference IS NOT NULL
+            AND length(trim(clearing_reference)) > 0
+        )
+        OR (
+            payment_status <> 'paid'
+            AND payment_date IS NULL
+            AND clearing_reference IS NULL
+        )
+    ),
     FOREIGN KEY (invoice_id)
         REFERENCES invoices (invoice_id)
         ON UPDATE CASCADE
@@ -715,3 +735,93 @@ SELECT
         ELSE 'exception'
     END AS invoice_matching_status
 FROM invoice_item_counts;
+
+CREATE VIEW vw_invoice_payment_progress AS
+WITH successful_payment_totals AS (
+    SELECT
+        payment.invoice_id,
+        ROUND(
+            SUM(
+                CASE
+                    WHEN payment.payment_status = 'paid'
+                    THEN payment.payment_amount
+                    ELSE 0
+                END
+            ),
+            2
+        ) AS successful_paid_amount,
+        SUM(
+            CASE
+                WHEN payment.payment_status = 'paid' THEN 1
+                ELSE 0
+            END
+        ) AS successful_payment_count,
+        MAX(
+            CASE
+                WHEN payment.payment_status = 'paid'
+                THEN payment.payment_date
+                ELSE NULL
+            END
+        ) AS latest_successful_payment_date
+    FROM payments AS payment
+    GROUP BY payment.invoice_id
+),
+invoice_payment_base AS (
+    SELECT
+        invoice.invoice_id,
+        invoice.vendor_id,
+        invoice.invoice_currency,
+        invoice.invoice_total_amount,
+        invoice.invoice_status,
+        invoice.blocked_flag,
+        matching.invoice_matching_status,
+        CASE
+            WHEN invoice.invoice_status IN ('posted', 'approved')
+                AND invoice.blocked_flag = 0
+                AND matching.invoice_matching_status = 'matched'
+                AND ROUND(
+                    invoice.invoice_total_amount
+                    - COALESCE(payment.successful_paid_amount, 0),
+                    2
+                ) > 0.000001
+            THEN 1
+            ELSE 0
+        END AS eligible_for_payment_flag,
+        COALESCE(payment.successful_paid_amount, 0)
+            AS successful_paid_amount,
+        COALESCE(payment.successful_payment_count, 0)
+            AS successful_payment_count,
+        payment.latest_successful_payment_date
+    FROM invoices AS invoice
+    JOIN vw_invoice_matching_summary AS matching
+        ON matching.invoice_id = invoice.invoice_id
+    LEFT JOIN successful_payment_totals AS payment
+        ON payment.invoice_id = invoice.invoice_id
+)
+SELECT
+    invoice_id,
+    vendor_id,
+    invoice_currency,
+    invoice_total_amount,
+    invoice_status,
+    blocked_flag,
+    invoice_matching_status,
+    eligible_for_payment_flag,
+    successful_paid_amount,
+    CASE
+        WHEN invoice_matching_status IN ('excluded', 'invalid') THEN NULL
+        ELSE ROUND(
+            MAX(invoice_total_amount - successful_paid_amount, 0),
+            2
+        )
+    END AS outstanding_amount,
+    successful_payment_count,
+    latest_successful_payment_date,
+    CASE
+        WHEN invoice_matching_status IN ('excluded', 'invalid') THEN NULL
+        WHEN successful_paid_amount <= 0.000001 THEN 'unpaid'
+        WHEN successful_paid_amount < invoice_total_amount - 0.000001
+        THEN 'partially paid'
+        ELSE 'paid'
+    END AS payment_progress_status
+FROM invoice_payment_base;

@@ -11,20 +11,19 @@ The repository is a simplified analytical simulation for Marmara Components, a f
 Implemented:
 
 - 16 persisted SQLite tables.
-- Five derived analytical views.
-- Deterministic synthetic data generation through Phase 4.
-- Master data, purchase requisitions, purchase orders, goods receipts, invoices, invoice items, and SAP Activate project tasks.
-- Integrity, foreign-key, lifecycle, fulfillment, delivery-performance, invoice matching, blocking, and deterministic regeneration checks.
+- Six derived analytical views.
+- Deterministic synthetic data generation through Phase 5.
+- Master data, purchase requisitions, purchase orders, goods receipts, invoices, invoice items, payments, and SAP Activate project tasks.
+- Integrity, foreign-key, lifecycle, fulfillment, delivery-performance, invoice matching, blocking, payment-progress, adversarial rollback, and deterministic regeneration checks.
 
 Tables implemented but currently empty for later phases:
 
-- `payments`
 - `change_requests`
 - `data_quality_issues`
 
 Not yet implemented:
 
-- Payment, change request, and data quality issue data generation.
+- Change request and data quality issue data generation.
 - Separate SQL analytics query files.
 - Dashboard assets.
 
@@ -38,6 +37,7 @@ Not yet implemented:
 | Item-level spend and fulfillment | `purchase_order_items` is the main grain for spend, quantity, delivery, and supplier reliability analytics. |
 | Stored lifecycle, derived progress | PO and PO-item lifecycle are stored; fulfillment and delivery performance are derived from receipt facts. |
 | Independent invoice concerns | Invoice lifecycle and blocking are stored independently; three-way matching is derived from PO, receipt, and invoice facts. |
+| Independent payment concerns | Payment rows store instruction or attempt results; invoice payment progress and current eligibility are derived separately. |
 | SQL-friendly structure | The schema uses readable SQLite tables, constraints, foreign keys, and views. |
 
 ## 4. Persisted Tables
@@ -56,7 +56,7 @@ Not yet implemented:
 | `goods_receipts` | Transaction event | Receipt events against PO items for physical receipt, acceptance, rejection, and delivery analysis. |
 | `invoices` | Transaction header | Supplier invoice lifecycle, currency, totals, and independent blocking information. |
 | `invoice_items` | Transaction item | Raw supplier invoice lines linked to PO items. |
-| `payments` | Transaction event | Future payment records linked to invoices. |
+| `payments` | Transaction event | Payment instructions or attempts linked to invoices, with successful clearing represented by `paid`. |
 | `sap_activate_project_tasks` | Project tracking | SAP Activate phase tasks, ownership, status, readiness weight, and completion. |
 | `change_requests` | Project tracking | Future project scope or requirement changes. |
 | `data_quality_issues` | Readiness tracking | Future master-data, transaction-data, and migration-readiness issues. |
@@ -132,7 +132,7 @@ Rejected quantity remains open against the order; it does not close the PO item.
 
 ### `invoices`
 
-Invoice header table. `invoice_status` represents document lifecycle only: `received`, `posted`, `approved`, `disputed`, or `cancelled`. Blocking is stored independently through `blocked_flag` and `block_reason`. Payment state is not stored on the invoice and will later be derived from `payments`.
+Invoice header table. `invoice_status` represents document lifecycle only: `received`, `posted`, `approved`, `disputed`, or `cancelled`. Blocking is stored independently through `blocked_flag` and `block_reason`. Payment state is not stored on the invoice; it is derived from `payments` through `vw_invoice_payment_progress`.
 
 `invoice_currency` must agree with the document currency of every referenced PO. `invoice_total_amount` is the sum of net invoice-item amounts; Phase 4 does not model tax or freight.
 
@@ -142,9 +142,32 @@ Raw invoice-item table. Each row has an item number unique within its invoice, r
 
 Quantity variance, price variance, and matching status are deliberately not stored in this table. They are derived in `vw_invoice_item_three_way_match` so they cannot drift away from PO, GR, or invoice facts.
 
-### Later Finance and Exception Tables
+### `payments`
 
-The current schema includes `payments`, `change_requests`, and `data_quality_issues`, but the deterministic generator leaves these tables empty. Their structures support later payment analysis, project exception tracking, and readiness analysis.
+Each row represents one payment instruction or attempt and its current or final result for one invoice.
+
+Important columns:
+
+| Column | Description |
+| --- | --- |
+| `payment_id` | Primary key for the payment instruction or attempt. |
+| `invoice_id` | Foreign key to the related invoice. |
+| `payment_status_date` | Required date on which the current or final payment status was recorded. |
+| `payment_date` | Successful payment or clearing date; populated only when status is `paid`. |
+| `payment_amount` | Positive amount denominated in the parent invoice's currency. |
+| `payment_method` | Bank transfer, check, card, or other. |
+| `payment_status` | `scheduled`, `on hold`, `paid`, `failed`, or `cancelled`. |
+| `clearing_reference` | Unique non-empty reference required only for successful payments. |
+
+`partially paid` is not a payment-row status. A successful payment event is `paid` even when it settles only part of the invoice; invoice-level `partially paid` progress is derived by aggregating successful payment amounts.
+
+The table does not store `payment_currency`. Payment amount inherits `invoices.invoice_currency`. FX conversion, settlement currency, exchange rates, refunds, credit memos, and chargebacks are outside Phase 5.
+
+Local row invariants are enforced by schema constraints. Payment chronology, amount arithmetic, and cumulative overpayment are checked as historical fact rules by the deterministic Python generator rather than database triggers. Current invoice eligibility is checked separately only when a payment row is treated as a newly proposed successful payment.
+
+### Later Exception Tables
+
+The schema includes `change_requests` and `data_quality_issues`, but the deterministic generator leaves them empty for later project-exception and readiness analysis.
 
 ## 6. Primary Keys and Relationships
 
@@ -184,7 +207,7 @@ Delete behavior:
 | `goods_receipts` | One row per receipt event for a PO item. | Multiple receipt events can fulfill one PO item. |
 | `invoices` | One row per supplier invoice header. | Invoice lifecycle, currency, total, blocking, and header-level matching analysis. |
 | `invoice_items` | One row per invoice line linked to a PO item. | Raw quantity, unit price, and amount facts for three-way matching. |
-| `payments` | One row per payment event for an invoice. | Future payment timing and completion analysis. |
+| `payments` | One row per payment instruction or attempt for an invoice. | Stores the attempt result without storing invoice-level payment progress. |
 | `sap_activate_project_tasks` | One row per project task or readiness activity. | Phase, workstream, completion, and readiness scoring. |
 | `change_requests` | One row per project change request. | Future scope and requirement change analysis. |
 | `data_quality_issues` | One row per data quality or migration-readiness issue. | Future issue count, resolution, and readiness impact analysis. |
@@ -193,6 +216,7 @@ Delete behavior:
 | `vw_po_item_delivery_performance` | One row per PO item. | Derived item-level delivery performance. |
 | `vw_invoice_item_three_way_match` | One row per non-cancelled invoice item. | Derived PO-GR-invoice quantity and price matching. |
 | `vw_invoice_matching_summary` | One row per invoice header. | Header-level matching rollup with explicit excluded and invalid states. |
+| `vw_invoice_payment_progress` | One row per invoice header. | Successful-payment rollup, current eligibility, outstanding amount, and derived payment progress. |
 
 ## 8. Analytical Views
 
@@ -302,6 +326,42 @@ Header matching statuses:
 
 Excluded and invalid headers do not contribute matched-item, exception-item, or Three-Way Matching Exception Rate calculations.
 
+### `vw_invoice_payment_progress`
+
+Grain: one row per invoice header.
+
+The view joins every invoice to `vw_invoice_matching_summary` and aggregates only payment rows where `payment_status = 'paid'`. Failed, cancelled, scheduled, and on-hold amounts contribute zero to successful paid amount.
+
+Important output columns:
+
+- `eligible_for_payment_flag`
+- `successful_paid_amount`
+- `outstanding_amount`
+- `successful_payment_count`
+- `latest_successful_payment_date`
+- `payment_progress_status`
+
+Current eligibility requires:
+
+- Invoice lifecycle status is `posted` or `approved`.
+- `blocked_flag = 0`.
+- Invoice matching status is `matched`.
+- Outstanding amount is greater than the numeric tolerance.
+
+`eligible_for_payment_flag` means that a new successful payment can be accepted now. A fully paid invoice is therefore not currently eligible even when its lifecycle, matching, and blocking controls otherwise pass.
+
+Payment progress for valid non-cancelled invoices:
+
+- No successful amount -> `unpaid`.
+- Successful amount greater than zero and below invoice total -> `partially paid`.
+- Successful amount equal to invoice total -> `paid`.
+
+Cancelled or invalid invoices have eligibility flag zero, null outstanding amount, and null payment-progress status. Historical successful payment facts remain visible even if an invoice later becomes blocked, cancelled, or otherwise ineligible; current eligibility does not rewrite payment history.
+
+New-payment acceptance and historical payment-fact validation are separate concepts. Current invoice status, blocking, and matching are checked for newly proposed successful payments. They are not applied retroactively to existing paid rows because invoice, blocking, and matching state history is not modeled. The current invoice header cannot reconstruct eligibility as of a historical payment date.
+
+Outstanding amount is kept at zero rather than becoming negative in the analytical output. Overpayments remain invalid data and are detected by Python business-rule validation.
+
 ## 9. Relationship and Design Rationale
 
 The model follows a simplified procure-to-pay analytical flow:
@@ -315,9 +375,10 @@ The model follows a simplified procure-to-pay analytical flow:
 - Receipt fulfillment is derived from accepted posted quantity.
 - Invoice lifecycle and blocking are stored independently.
 - Three-way matching is derived at invoice-item grain and then rolled up to invoice grain.
-- Payment progress will later be derived from payment records rather than stored on `invoice_status`.
+- Payment instruction results are stored at payment grain.
+- Successful payment amounts, outstanding amount, and invoice payment progress are derived at invoice grain.
 
-This design keeps delivery reliability, open quantity, document lifecycle, receipt workflow, invoice matching, blocking, and future payment progress logically separate.
+This design keeps delivery reliability, open quantity, document lifecycle, receipt workflow, invoice matching, blocking, payment-attempt result, current eligibility, and invoice payment progress logically separate.
 
 Phase 4 assumes PO, receipt, and invoice quantities use the material base unit of measure. Unit-of-measure conversion is not implemented. Tax, freight, and business matching tolerances are also outside scope. Generated invoice unit prices use no more than two decimal places. Price comparison uses two-decimal monetary values, and quantity comparison uses floating-point tolerance only.
 
@@ -460,9 +521,12 @@ erDiagram
     payments {
         string payment_id PK
         string invoice_id FK
+        date payment_status_date
         date payment_date
         decimal payment_amount
+        string payment_method
         string payment_status
+        string clearing_reference
     }
 
     sap_activate_project_tasks {
@@ -493,7 +557,7 @@ erDiagram
     }
 ```
 
-The ERD shows persisted tables only. The derived analytical views are `vw_po_item_fulfillment`, `vw_po_fulfillment`, `vw_po_item_delivery_performance`, `vw_invoice_item_three_way_match`, and `vw_invoice_matching_summary`.
+The ERD shows persisted tables only. The derived analytical views are `vw_po_item_fulfillment`, `vw_po_fulfillment`, `vw_po_item_delivery_performance`, `vw_invoice_item_three_way_match`, `vw_invoice_matching_summary`, and `vw_invoice_payment_progress`.
 
 ## 11. KPI Group to Source Object Mapping
 
@@ -508,4 +572,5 @@ The ERD shows persisted tables only. The derived analytical views are `vw_po_ite
 | Supplier Performance | Average Delivery Delay | `goods_receipts`, `purchase_order_items`, `vendors` | Implemented in Phase 3 validation logic. |
 | Procurement Operations | Open PO Quantity | `vw_po_item_fulfillment` | Implemented in Phase 3 view logic. |
 | Invoice and Matching | Three-Way Matching Exception Rate and Blocked Invoice Count | `purchase_order_items`, `goods_receipts`, `invoices`, `invoice_items`, `vw_invoice_item_three_way_match`, `vw_invoice_matching_summary` | Implemented in Phase 4 view and validation logic. |
+| Payment Progress | Invoice Payment Completion Rate and Outstanding Invoice Amount by Currency | `invoices`, `payments`, `vw_invoice_matching_summary`, `vw_invoice_payment_progress` | Implemented in Phase 5 view and validation logic. |
 | SAP Activate Readiness | Data readiness and go-live outputs | `sap_activate_project_tasks`, `change_requests`, `data_quality_issues` | Partially modeled; data generation planned for later phases. |
