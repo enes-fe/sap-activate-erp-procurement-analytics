@@ -21,7 +21,7 @@ The final portfolio should be readable to recruiters, data analysts, business an
 
 ## 3. Business Scenario
 
-Marmara Components is implementing or improving ERP procurement processes using SAP Activate as the project framing. The company wants better visibility into supplier performance, purchase order processing, delivery reliability, invoice matching, spend distribution, material category performance, process bottlenecks, data quality risk, and implementation readiness.
+Marmara Components is implementing or improving ERP procurement processes using SAP Activate as the project framing. The company wants better visibility into supplier performance, purchase order processing, delivery reliability, invoice matching, PO commitment distribution, material category performance, process bottlenecks, data quality risk, and implementation readiness.
 
 The analytics layer supports stakeholders such as procurement managers, buyers, finance teams, SAP consultants, business analysts, project managers, and key users.
 
@@ -32,7 +32,7 @@ Implemented stack:
 - SQLite is the current database.
 - Python 3 is used for deterministic synthetic data generation.
 - The generator uses Python standard library modules and Faker.
-- SQL is used for the schema, constraints, views, validation-ready logic, and future analytics query files.
+- SQL is used for the schema, constraints, analytical views, and the standalone Phase 7 analytics package.
 - Markdown is used for documentation.
 - Git and GitHub are used for version control and portfolio presentation.
 - Power BI or Tableau remain optional future dashboard layers.
@@ -180,14 +180,14 @@ Current deterministic Phase 6 readiness results:
 | Step 1: Foundation | Completed | Project scope, README, business case, KPI catalog, SAP Activate mapping, and project context exist. |
 | Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and eight analytical views. |
 | Step 3: Synthetic data | Phase 1-6 completed | Master, procurement, invoice, payment, SAP Activate task, change-request, and data-quality issue data are generated. |
-| Step 4: SQL analytics | Partially started | Fulfillment, delivery-performance, invoice matching, payment-progress, change-request, and readiness logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
-| Step 5: Documentation | In progress | Current work aligns documentation with the Phase 6 project-readiness implementation. |
+| Step 4: SQL analytics | Completed for current scope | Six standalone analyses expose PO commitment, delivery, open-PO, invoice, payment, and readiness logic; every file has a deterministic Seed-42 headline validated by a read-only runner. |
+| Step 5: Documentation | Current through Phase 7 | Repository documentation describes the SQL package, reporting rules, expected headlines, and validation workflow. |
 | Step 6: Dashboard | Not started / optional | Dashboard tools should wait until core SQL outputs are stable. |
 
 Latest completed technical milestone:
 
 ```text
-Phase 6 change requests, data-quality issues, and project-readiness analytics
+Phase 7 standalone SQL analytics package and deterministic headline validation
 ```
 
 ## 9. Current Completed Scope
@@ -215,6 +215,8 @@ Completed:
 - Deterministic change-request and data-quality issue generation.
 - Activate-phase change-request summary view.
 - Project-level readiness summary and transparent readiness classification.
+- Six recruiter-readable standalone SQL analysis files.
+- Read-only SQL runner with explicit Seed-42 headline expectations.
 - Current payment-eligibility derivation.
 - Independent invoice lifecycle and blocking state.
 - Independent payment-event result and invoice payment-progress state.
@@ -223,7 +225,6 @@ Completed:
 
 Not yet implemented:
 
-- Separate SQL analytics query files.
 - Dashboard implementation.
 - Final portfolio screenshots.
 - SAP API or SAP Learning Hub integration.
@@ -259,6 +260,16 @@ sap-activate-erp-procurement-analytics/
 |
 |-- scripts/
 |   |-- generate_data.py
+|   |-- validate_sql_queries.py
+|
+|-- sql/
+|   |-- README.md
+|   |-- 01_procurement_spend.sql
+|   |-- 02_supplier_delivery_performance.sql
+|   |-- 03_open_po_analysis.sql
+|   |-- 04_invoice_matching_analysis.sql
+|   |-- 05_payment_progress_analysis.sql
+|   |-- 06_project_readiness_analysis.sql
 |
 |-- README.md
 |-- PROJECT_CONTEXT.md

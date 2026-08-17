@@ -13,8 +13,8 @@ The goal is to show how procurement analytics requirements, data modeling, synth
 | Discover | Identify the procurement business problem, pain points, and improvement opportunities. | Translate business pain points into measurable questions and candidate KPIs. | Business case complete. |
 | Prepare | Define scope, stakeholders, planned sources, and KPI priorities. | Establish reporting scope before implementation. | Scope and KPI catalog established. |
 | Explore | Review procurement process gaps and reporting requirements. | Connect reporting needs to process steps such as requisition, PO, goods receipt, invoice, and payment. | Process, data model, and KPI requirements documented. |
-| Realize | Build the analytical layer iteratively. | Convert agreed requirements into schema, deterministic data, views, and validation logic. | Deterministic procurement, invoice, payment, change-request, and data-quality scope is implemented through Phase 6. |
-| Deploy | Prepare final reporting outputs for review and readiness storytelling. | Use the implemented readiness classification while packaging future SQL outputs, documentation, and optional dashboard screenshots. | Readiness analytics implemented; final portfolio packaging remains. |
+| Realize | Build the analytical layer iteratively. | Convert agreed requirements into schema, deterministic data, views, standalone queries, and validation logic. | Deterministic data and analytical views are implemented through Phase 6; the standalone SQL package is implemented in Phase 7. |
+| Deploy | Prepare final reporting outputs for review and readiness storytelling. | Use the implemented readiness classification and validated SQL outputs for portfolio packaging. | Readiness analytics and SQL packaging are implemented; optional dashboard and presentation work remain. |
 | Run | Monitor procurement performance and continuous improvement opportunities. | Track recurring procurement KPIs, supplier performance, and exception diagnostics. | Conceptual / future analytics use. |
 
 ## Discover
@@ -87,20 +87,26 @@ The Realize phase is where the analytical assets become executable. The reposito
 - `vw_change_request_phase_summary`.
 - `vw_project_readiness_summary`.
 - Phase 1 through Phase 6 validation and deterministic regeneration checks.
+- Six standalone Phase 7 SQL analysis files.
+- Read-only analytics runner with explicit Seed-42 headline validation.
 
-This represents iterative realization of the analytical layer through project-readiness analytics. Separate SQL analytics query files, optional dashboards, final screenshots, and final portfolio packaging remain future work.
+This represents iterative realization of the analytical layer through project-readiness analytics and a recruiter-readable SQL package. Optional dashboards, final screenshots, and presentation work remain future-oriented.
 
 ## Deploy
 
-The Deploy phase remains partly future-oriented for this repository. Phase 6 now supplies readiness analytics, while final packaging and presentation remain future work.
+The Deploy phase remains partly future-oriented for this repository. Phase 6 supplies readiness analytics, and Phase 7 packages the implemented logic as validated standalone SQL outputs. Dashboard and presentation work remain future-oriented.
 
-Future Deploy outputs should include:
+Implemented Deploy-oriented outputs include:
 
 - Final SQL query package.
-- Documentation review and cleanup.
-- Dashboard screenshots if a dashboard is built.
+- Documentation alignment and deterministic SQL validation.
 - Presentation of the implemented readiness reporting and its transparent blocker logic.
 - Clear explanation of what is synthetic, what is implemented, and what is planned.
+
+Remaining optional Deploy outputs include:
+
+- Dashboard screenshots if a dashboard is built.
+- Final recruiter-facing presentation assets.
 
 This project should not claim a live SAP production deployment.
 
@@ -114,7 +120,7 @@ Future Run use cases include:
 - Receipt-event delay diagnostics.
 - Supplier performance monitoring.
 - Open quantity and open PO follow-up.
-- Invoice exception monitoring after invoice phases are implemented.
+- Invoice exception monitoring.
 - Continuous improvement tracking based on recurring KPI reviews.
 
 ## Project Progress Summary
@@ -124,8 +130,8 @@ Future Run use cases include:
 | Discover | Business case complete. |
 | Prepare | Scope and KPI catalog established. |
 | Explore | Process/data model and KPI requirements documented. |
-| Realize | Deterministic analytical scope is implemented through change requests, data-quality issues, and project readiness. |
-| Deploy | Readiness analytics implemented; final output packaging and optional dashboard work remain. |
+| Realize | Deterministic analytical scope and standalone Phase 7 SQL package are implemented. |
+| Deploy | Readiness analytics and SQL output packaging are implemented; optional dashboard and presentation work remain. |
 | Run | Conceptual / future analytics use. |
 
 ## Practical Interpretation
