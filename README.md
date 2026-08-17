@@ -45,12 +45,12 @@ Completed:
 - Intentional perfect-match, price-mismatch, quantity-mismatch, and missing-goods-receipt scenarios.
 - Phase 5 payment-event generation and invoice-level payment-progress derivation.
 - Intentional failed, cancelled, on-hold, split successful payment, and fully paid scenarios.
-- Phase 1 through Phase 5 validations, including integrity, foreign-key, deterministic regeneration, lifecycle, fulfillment, delivery KPI, invoice arithmetic, matching, blocking, payment arithmetic, eligibility, and rollback checks.
+- Phase 6 deterministic change-request and data-quality issue generation.
+- Activate-phase change-request summary and transparent project-readiness views.
+- Phase 1 through Phase 6 validations, including integrity, foreign-key, deterministic regeneration, lifecycle, fulfillment, delivery KPI, invoice arithmetic, matching, blocking, payment arithmetic, project readiness, and adversarial rollback checks.
 
 Not yet implemented:
 
-- Change request data generation.
-- Data quality issue generation.
 - Separate SQL analytics query files.
 - Dashboard implementation and final portfolio screenshots.
 - SAP API or SAP Learning Hub integration.
@@ -69,6 +69,9 @@ The current model deliberately separates related but different concepts:
 - Derived three-way matching state, calculated from PO, invoice, and eligible posted accepted receipt quantities.
 - Payment-instruction result, such as scheduled, on hold, paid, failed, or cancelled.
 - Derived invoice payment progress, calculated only from successful payment amounts.
+- Change-request lifecycle, separate from SAP Activate task status.
+- Data-quality issue lifecycle, separate from both task and change-request status.
+- Derived go-live readiness classification based on explicit task, change-request, and data-quality blockers.
 
 This prevents one status field from representing unrelated business meanings. Receipt fulfillment is calculated through SQL views from accepted quantity; it is not manually stored as a purchase order status.
 
@@ -80,6 +83,8 @@ This prevents one status field from representing unrelated business meanings. Re
 - `vw_invoice_item_three_way_match`: one row per non-cancelled invoice item with eligible accepted quantity, cumulative invoiced quantity, quantity and price variances, monetary price impact, and derived matching status.
 - `vw_invoice_matching_summary`: one row per invoice header with eligible, matched, and exception item counts plus `excluded` cancelled headers and `invalid` non-cancelled zero-item headers.
 - `vw_invoice_payment_progress`: one row per invoice header with current payment eligibility, successful paid amount, outstanding amount, successful payment count, latest successful payment date, and derived payment progress.
+- `vw_change_request_phase_summary`: one row per SAP Activate phase with status, open, and high/critical open request counts.
+- `vw_project_readiness_summary`: one project-level row with pre-go-live task progress, change-request risk, data-quality resolution, and derived go-live readiness.
 
 ## Reproducible Generation
 
@@ -89,7 +94,7 @@ Generate or regenerate the SQLite dataset from the repository root:
 python scripts/generate_data.py --reset
 ```
 
-The generator uses default seed `42`, so the current synthetic dataset is deterministic. It recreates `database/marmara_components.db`, applies the SQLite schema, inserts the synthetic data, and runs integrity, foreign-key, scenario, fulfillment, delivery-performance, invoice, three-way matching, payment-progress, and adversarial rollback checks.
+The generator uses default seed `42`, so the current synthetic dataset is deterministic. It recreates `database/marmara_components.db`, applies the SQLite schema, inserts the synthetic data, and runs integrity, foreign-key, scenario, fulfillment, delivery-performance, invoice, three-way matching, payment-progress, project-readiness, and adversarial rollback checks.
 
 ## Current Deterministic Dataset Snapshot
 
@@ -111,8 +116,10 @@ Current generated row counts:
 | `invoice_items` | 5 |
 | `payments` | 5 |
 | `sap_activate_project_tasks` | 12 |
+| `change_requests` | 6 |
+| `data_quality_issues` | 7 |
 
-The later-phase exception tables currently exist but are empty: `change_requests` and `data_quality_issues`.
+The Phase 6 project dataset contains six change requests and seven data-quality issues. These rows record project and source-data findings without corrupting the valid deterministic procurement, invoice, or payment facts.
 
 Goods receipt facts in the current deterministic synthetic dataset:
 
@@ -163,6 +170,16 @@ Current Phase 5 payment-progress results:
 
 Payment rows represent payment instructions or attempts, not invoice-level payment progress. The `payments.payment_status` field therefore does not contain `partially paid`; the `unpaid`, `partially paid`, and `paid` invoice states are derived in `vw_invoice_payment_progress`. Current payment eligibility means that a new successful payment can be accepted now, so a fully paid invoice with no outstanding balance is not eligible. Historical successful payments remain visible if an invoice is blocked or cancelled later; current header state is not used to reconstruct historical eligibility because state history is outside Phase 5. `payment_amount` inherits `invoices.invoice_currency`; Phase 5 does not store a duplicate payment currency or perform FX conversion.
 
+Current Phase 6 readiness results:
+
+- Open Change Request Count: 3.
+- High/Critical Open Change Request Count: 2.
+- Unresolved High/Critical Data Quality Issue Count: 2.
+- Data Quality Resolution Rate: 3 / 6 non-cancelled issues = 50.0%.
+- Data Quality Disposition Rate: 4 / 6 non-cancelled issues = 66.7%; accepted risk is disposed but not resolved.
+- Go-Live Readiness Classification: `not ready`.
+- Permanent hard blockers: blocked critical Deploy task `TASK-010` and open critical issue `DQ-004`.
+
 PO Item On-Time In-Full Rate is the primary supplier-performance KPI because it evaluates complete business fulfillment at the PO-item grain and avoids overweighting split deliveries. Receipt Event On-Time Rate is useful as a secondary operational diagnostic because one PO item with multiple receipt events can contribute multiple events.
 
 ## SAP Activate Connection
@@ -173,11 +190,10 @@ The repository uses SAP Activate as a practical project-storytelling structure:
 - Prepare: define scope, stakeholders, KPI priorities, and planned data sources.
 - Explore: map reporting requirements to procurement process and data requirements.
 - Realize: implement schema, deterministic data, analytical views, and validation logic.
-- Deploy: future packaging of SQL query outputs, documentation review, dashboard screenshots, and readiness reporting.
+- Deploy: readiness reporting is implemented; final SQL packaging, documentation review, and optional dashboard screenshots remain future work.
 - Run: future recurring monitoring of procurement KPIs and process improvement opportunities.
 
 ## Next Steps
 
-1. Change request and data-quality issue generation.
-2. Separate SQL analytics query files.
-3. Optional dashboard and final portfolio presentation.
+1. Separate SQL analytics query files.
+2. Optional dashboard and final portfolio presentation.

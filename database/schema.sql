@@ -1,5 +1,7 @@
 PRAGMA foreign_keys = ON;
 
+DROP VIEW IF EXISTS vw_project_readiness_summary;
+DROP VIEW IF EXISTS vw_change_request_phase_summary;
 DROP VIEW IF EXISTS vw_invoice_payment_progress;
 DROP VIEW IF EXISTS vw_invoice_matching_summary;
 DROP VIEW IF EXISTS vw_invoice_item_three_way_match;
@@ -360,6 +362,21 @@ CREATE TABLE change_requests (
     decision_date TEXT
         CHECK (decision_date IS NULL OR decision_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     business_impact TEXT,
+    CHECK (decision_date IS NULL OR decision_date >= requested_date),
+    CHECK (
+        (status IN ('submitted', 'under review') AND decision_date IS NULL)
+        OR
+        (
+            status IN (
+                'approved',
+                'rejected',
+                'deferred',
+                'implemented',
+                'cancelled'
+            )
+            AND decision_date IS NOT NULL
+        )
+    ),
     FOREIGN KEY (related_task_id)
         REFERENCES sap_activate_project_tasks (task_id)
         ON UPDATE CASCADE
@@ -368,8 +385,19 @@ CREATE TABLE change_requests (
 
 CREATE TABLE data_quality_issues (
     data_quality_issue_id TEXT PRIMARY KEY,
+    issue_description TEXT NOT NULL
+        CHECK (length(trim(issue_description)) > 0),
     related_task_id TEXT,
-    affected_entity_type TEXT NOT NULL,
+    affected_entity_type TEXT NOT NULL
+        CHECK (
+            affected_entity_type IN (
+                'vendor',
+                'material',
+                'purchase order',
+                'invoice',
+                'project task'
+            )
+        ),
     affected_entity_id TEXT,
     issue_category TEXT NOT NULL
         CHECK (issue_category IN ('missing value', 'duplicate', 'invalid reference', 'inconsistent status', 'pricing issue', 'migration mapping issue')),
@@ -385,6 +413,12 @@ CREATE TABLE data_quality_issues (
         CHECK (migration_relevant_flag IN (0, 1)),
     readiness_impact_score REAL NOT NULL DEFAULT 0
         CHECK (readiness_impact_score >= 0),
+    CHECK (resolved_date IS NULL OR resolved_date >= detected_date),
+    CHECK (
+        (issue_status = 'resolved' AND resolved_date IS NOT NULL)
+        OR
+        (issue_status <> 'resolved' AND resolved_date IS NULL)
+    ),
     FOREIGN KEY (related_task_id)
         REFERENCES sap_activate_project_tasks (task_id)
         ON UPDATE CASCADE
@@ -825,3 +859,268 @@ SELECT
         ELSE 'paid'
     END AS payment_progress_status
 FROM invoice_payment_base;
+
+CREATE VIEW vw_change_request_phase_summary AS
+WITH activate_phases (activate_phase, phase_order) AS (
+    VALUES
+        ('discover', 1),
+        ('prepare', 2),
+        ('explore', 3),
+        ('realize', 4),
+        ('deploy', 5),
+        ('run', 6)
+)
+SELECT
+    phase.activate_phase,
+    COUNT(change_request.change_request_id) AS total_request_count,
+    SUM(
+        CASE WHEN change_request.status = 'submitted' THEN 1 ELSE 0 END
+    ) AS submitted_request_count,
+    SUM(
+        CASE WHEN change_request.status = 'under review' THEN 1 ELSE 0 END
+    ) AS under_review_request_count,
+    SUM(
+        CASE WHEN change_request.status = 'approved' THEN 1 ELSE 0 END
+    ) AS approved_request_count,
+    SUM(
+        CASE WHEN change_request.status = 'implemented' THEN 1 ELSE 0 END
+    ) AS implemented_request_count,
+    SUM(
+        CASE WHEN change_request.status = 'deferred' THEN 1 ELSE 0 END
+    ) AS deferred_request_count,
+    SUM(
+        CASE WHEN change_request.status = 'rejected' THEN 1 ELSE 0 END
+    ) AS rejected_request_count,
+    SUM(
+        CASE WHEN change_request.status = 'cancelled' THEN 1 ELSE 0 END
+    ) AS cancelled_request_count,
+    SUM(
+        CASE
+            WHEN change_request.status IN ('submitted', 'under review', 'approved')
+            THEN 1
+            ELSE 0
+        END
+    ) AS open_request_count,
+    SUM(
+        CASE
+            WHEN change_request.status IN ('submitted', 'under review', 'approved')
+                AND change_request.priority IN ('high', 'critical')
+            THEN 1
+            ELSE 0
+        END
+    ) AS high_critical_open_request_count
+FROM activate_phases AS phase
+LEFT JOIN change_requests AS change_request
+    ON change_request.activate_phase = phase.activate_phase
+GROUP BY phase.activate_phase, phase.phase_order;
+
+CREATE VIEW vw_project_readiness_summary AS
+WITH task_summary AS (
+    SELECT
+        COUNT(*) AS pre_go_live_task_count,
+        SUM(
+            CASE
+                WHEN task_status = 'completed' AND completion_percent = 100
+                THEN 1
+                ELSE 0
+            END
+        ) AS completed_pre_go_live_task_count,
+        SUM(CASE WHEN critical_flag = 1 THEN 1 ELSE 0 END)
+            AS critical_pre_go_live_task_count,
+        SUM(
+            CASE
+                WHEN critical_flag = 1
+                    AND (task_status <> 'completed' OR completion_percent < 100)
+                THEN 1
+                ELSE 0
+            END
+        ) AS incomplete_critical_pre_go_live_task_count,
+        SUM(
+            CASE
+                WHEN critical_flag = 1
+                    AND task_status IN ('blocked', 'delayed', 'cancelled')
+                THEN 1
+                ELSE 0
+            END
+        ) AS blocking_critical_pre_go_live_task_count
+    FROM sap_activate_project_tasks
+    WHERE activate_phase <> 'run'
+),
+change_request_summary AS (
+    SELECT
+        COUNT(*) AS total_change_request_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN status IN ('submitted', 'under review', 'approved')
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS open_change_request_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN status IN ('submitted', 'under review', 'approved')
+                        AND priority = 'high'
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS high_open_change_request_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN status IN ('submitted', 'under review', 'approved')
+                        AND priority = 'critical'
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS critical_open_change_request_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN status IN ('submitted', 'under review', 'approved')
+                        AND priority IN ('high', 'critical')
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS high_critical_open_change_request_count
+    FROM change_requests
+),
+data_quality_summary AS (
+    SELECT
+        COUNT(*) AS total_data_quality_issue_count,
+        COALESCE(
+            SUM(CASE WHEN issue_status <> 'cancelled' THEN 1 ELSE 0 END),
+            0
+        )
+            AS non_cancelled_data_quality_issue_count,
+        COALESCE(
+            SUM(CASE WHEN issue_status = 'cancelled' THEN 1 ELSE 0 END),
+            0
+        )
+            AS cancelled_data_quality_issue_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN issue_status IN ('open', 'in progress') THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS unresolved_data_quality_issue_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN issue_status IN ('open', 'in progress')
+                        AND severity = 'high'
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS unresolved_high_data_quality_issue_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN issue_status IN ('open', 'in progress')
+                        AND severity = 'critical'
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS unresolved_critical_data_quality_issue_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN issue_status IN ('open', 'in progress')
+                        AND severity IN ('high', 'critical')
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS unresolved_high_critical_data_quality_issue_count,
+        COALESCE(
+            SUM(CASE WHEN issue_status = 'resolved' THEN 1 ELSE 0 END),
+            0
+        )
+            AS resolved_data_quality_issue_count,
+        COALESCE(
+            SUM(CASE WHEN issue_status = 'accepted risk' THEN 1 ELSE 0 END),
+            0
+        )
+            AS accepted_risk_data_quality_issue_count,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN issue_status = 'accepted risk'
+                        AND severity IN ('high', 'critical')
+                    THEN 1
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS high_critical_accepted_risk_data_quality_issue_count
+    FROM data_quality_issues
+)
+SELECT
+    task.pre_go_live_task_count,
+    task.completed_pre_go_live_task_count,
+    ROUND(
+        100.0 * task.completed_pre_go_live_task_count
+        / NULLIF(task.pre_go_live_task_count, 0),
+        1
+    ) AS pre_go_live_task_completion_rate_pct,
+    task.critical_pre_go_live_task_count,
+    task.incomplete_critical_pre_go_live_task_count,
+    task.blocking_critical_pre_go_live_task_count,
+    change_request.total_change_request_count,
+    change_request.open_change_request_count,
+    change_request.high_critical_open_change_request_count,
+    change_request.critical_open_change_request_count,
+    data_quality.total_data_quality_issue_count,
+    data_quality.non_cancelled_data_quality_issue_count,
+    data_quality.cancelled_data_quality_issue_count,
+    data_quality.unresolved_data_quality_issue_count,
+    data_quality.unresolved_high_critical_data_quality_issue_count,
+    data_quality.unresolved_critical_data_quality_issue_count,
+    data_quality.resolved_data_quality_issue_count,
+    data_quality.accepted_risk_data_quality_issue_count,
+    data_quality.high_critical_accepted_risk_data_quality_issue_count,
+    ROUND(
+        100.0 * data_quality.resolved_data_quality_issue_count
+        / NULLIF(data_quality.non_cancelled_data_quality_issue_count, 0),
+        1
+    ) AS data_quality_resolution_rate_pct,
+    ROUND(
+        100.0 * (
+            data_quality.resolved_data_quality_issue_count
+            + data_quality.accepted_risk_data_quality_issue_count
+        )
+        / NULLIF(data_quality.non_cancelled_data_quality_issue_count, 0),
+        1
+    ) AS data_quality_disposition_rate_pct,
+    CASE
+        WHEN task.blocking_critical_pre_go_live_task_count > 0
+            OR change_request.critical_open_change_request_count > 0
+            OR data_quality.unresolved_critical_data_quality_issue_count > 0
+        THEN 'not ready'
+        WHEN task.incomplete_critical_pre_go_live_task_count > 0
+            OR change_request.high_open_change_request_count > 0
+            OR data_quality.unresolved_high_data_quality_issue_count > 0
+            OR data_quality.high_critical_accepted_risk_data_quality_issue_count > 0
+        THEN 'at risk'
+        ELSE 'ready'
+    END AS go_live_readiness_classification
+FROM task_summary AS task
+CROSS JOIN change_request_summary AS change_request
+CROSS JOIN data_quality_summary AS data_quality;

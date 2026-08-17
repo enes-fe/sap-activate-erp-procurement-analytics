@@ -13,8 +13,8 @@ The goal is to show how procurement analytics requirements, data modeling, synth
 | Discover | Identify the procurement business problem, pain points, and improvement opportunities. | Translate business pain points into measurable questions and candidate KPIs. | Business case complete. |
 | Prepare | Define scope, stakeholders, planned sources, and KPI priorities. | Establish reporting scope before implementation. | Scope and KPI catalog established. |
 | Explore | Review procurement process gaps and reporting requirements. | Connect reporting needs to process steps such as requisition, PO, goods receipt, invoice, and payment. | Process, data model, and KPI requirements documented. |
-| Realize | Build the analytical layer iteratively. | Convert agreed requirements into schema, deterministic data, views, and validation logic. | Schema and synthetic process data complete through goods receipt; later finance and project-exception phases remain. |
-| Deploy | Prepare final reporting outputs for review and readiness storytelling. | Package SQL query outputs, documentation, dashboard screenshots, and readiness reporting. | Not started. |
+| Realize | Build the analytical layer iteratively. | Convert agreed requirements into schema, deterministic data, views, and validation logic. | Deterministic procurement, invoice, payment, change-request, and data-quality scope is implemented through Phase 6. |
+| Deploy | Prepare final reporting outputs for review and readiness storytelling. | Use the implemented readiness classification while packaging future SQL outputs, documentation, and optional dashboard screenshots. | Readiness analytics implemented; final portfolio packaging remains. |
 | Run | Monitor procurement performance and continuous improvement opportunities. | Track recurring procurement KPIs, supplier performance, and exception diagnostics. | Conceptual / future analytics use. |
 
 ## Discover
@@ -47,7 +47,7 @@ Completed artifacts:
 - `docs/data_model.md`
 - Process-to-data model explanation.
 - KPI-to-source mapping.
-- Documentation of lifecycle, fulfillment, receipt workflow, and future invoice progress decisions.
+- Documentation of lifecycle, fulfillment, receipt workflow, invoice matching, payment progress, and project-readiness decisions.
 
 ## Explore-to-Realize Design Decision
 
@@ -78,20 +78,28 @@ The Realize phase is where the analytical assets become executable. The reposito
 - `vw_po_item_fulfillment`.
 - `vw_po_fulfillment`.
 - `vw_po_item_delivery_performance`.
-- Validation and deterministic regeneration checks.
+- Invoice and invoice-item matching scenarios.
+- `vw_invoice_item_three_way_match`.
+- `vw_invoice_matching_summary`.
+- Payment instructions, attempts, and invoice payment-progress scenarios.
+- `vw_invoice_payment_progress`.
+- Six deterministic change requests and seven deterministic data-quality issues.
+- `vw_change_request_phase_summary`.
+- `vw_project_readiness_summary`.
+- Phase 1 through Phase 6 validation and deterministic regeneration checks.
 
-This represents iterative realization of the analytical layer. Separate SQL analytics query files, invoice scenarios, payments, change requests, data quality issue data, dashboards, and final screenshots remain future work.
+This represents iterative realization of the analytical layer through project-readiness analytics. Separate SQL analytics query files, optional dashboards, final screenshots, and final portfolio packaging remain future work.
 
 ## Deploy
 
-The Deploy phase remains future-oriented for this repository. It should package stable analytical outputs for portfolio review and implementation-readiness storytelling.
+The Deploy phase remains partly future-oriented for this repository. Phase 6 now supplies readiness analytics, while final packaging and presentation remain future work.
 
 Future Deploy outputs should include:
 
 - Final SQL query package.
 - Documentation review and cleanup.
 - Dashboard screenshots if a dashboard is built.
-- Readiness reporting based on implemented project and data quality scenarios.
+- Presentation of the implemented readiness reporting and its transparent blocker logic.
 - Clear explanation of what is synthetic, what is implemented, and what is planned.
 
 This project should not claim a live SAP production deployment.
@@ -116,8 +124,8 @@ Future Run use cases include:
 | Discover | Business case complete. |
 | Prepare | Scope and KPI catalog established. |
 | Explore | Process/data model and KPI requirements documented. |
-| Realize | Schema and synthetic process data complete through goods receipt; later finance and project-exception phases remain. |
-| Deploy | Not started. |
+| Realize | Deterministic analytical scope is implemented through change requests, data-quality issues, and project readiness. |
+| Deploy | Readiness analytics implemented; final output packaging and optional dashboard work remain. |
 | Run | Conceptual / future analytics use. |
 
 ## Practical Interpretation
