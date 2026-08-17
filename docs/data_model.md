@@ -11,19 +11,14 @@ The repository is a simplified analytical simulation for Marmara Components, a f
 Implemented:
 
 - 16 persisted SQLite tables.
-- Six derived analytical views.
-- Deterministic synthetic data generation through Phase 5.
-- Master data, purchase requisitions, purchase orders, goods receipts, invoices, invoice items, payments, and SAP Activate project tasks.
-- Integrity, foreign-key, lifecycle, fulfillment, delivery-performance, invoice matching, blocking, payment-progress, adversarial rollback, and deterministic regeneration checks.
-
-Tables implemented but currently empty for later phases:
-
-- `change_requests`
-- `data_quality_issues`
+- Eight derived analytical views.
+- Deterministic synthetic data generation through Phase 6.
+- Master data, purchase requisitions, purchase orders, goods receipts, invoices, invoice items, payments, SAP Activate project tasks, six change requests, and seven data-quality issues.
+- Phase 6 change-request phase summaries and project-readiness analytics.
+- Integrity, foreign-key, lifecycle, fulfillment, delivery-performance, invoice matching, blocking, payment-progress, project-readiness, adversarial rollback, and deterministic regeneration checks.
 
 Not yet implemented:
 
-- Change request and data quality issue data generation.
 - Separate SQL analytics query files.
 - Dashboard assets.
 
@@ -58,8 +53,8 @@ Not yet implemented:
 | `invoice_items` | Transaction item | Raw supplier invoice lines linked to PO items. |
 | `payments` | Transaction event | Payment instructions or attempts linked to invoices, with successful clearing represented by `paid`. |
 | `sap_activate_project_tasks` | Project tracking | SAP Activate phase tasks, ownership, status, readiness weight, and completion. |
-| `change_requests` | Project tracking | Future project scope or requirement changes. |
-| `data_quality_issues` | Readiness tracking | Future master-data, transaction-data, and migration-readiness issues. |
+| `change_requests` | Project tracking | Deterministic project scope, requirement, process, data, reporting, and integration changes. |
+| `data_quality_issues` | Readiness tracking | Deterministic legacy migration and UAT data-quality findings without corrupting source facts. |
 
 ## 5. Key Table Details
 
@@ -165,9 +160,13 @@ The table does not store `payment_currency`. Payment amount inherits `invoices.i
 
 Local row invariants are enforced by schema constraints. Payment chronology, amount arithmetic, and cumulative overpayment are checked as historical fact rules by the deterministic Python generator rather than database triggers. Current invoice eligibility is checked separately only when a payment row is treated as a newly proposed successful payment.
 
-### Later Exception Tables
+### Project Change and Data-Quality Tables
 
-The schema includes `change_requests` and `data_quality_issues`, but the deterministic generator leaves them empty for later project-exception and readiness analysis.
+`change_requests` stores one current-state row per project change request. Its status is independent of `sap_activate_project_tasks.task_status`. Requests in `submitted`, `under review`, or `approved` status are analytically open; approved remains open until implemented. Deferred, rejected, implemented, and cancelled requests are dispositioned.
+
+`data_quality_issues` stores one current-state row per discovered legacy migration or UAT issue. `issue_description` records the concrete business scenario, while `affected_entity_type` and `affected_entity_id` identify the valid deterministic entity associated with the finding. These polymorphic entity references are validated in Python rather than modeled as multiple nullable foreign keys.
+
+Only `resolved` issues have a `resolved_date`. Accepted risk remains separate from resolved and retains a null resolution date. Cancelled issues are excluded from readiness-rate denominators. No change-request approval history or issue history is modeled.
 
 ## 6. Primary Keys and Relationships
 
@@ -209,14 +208,16 @@ Delete behavior:
 | `invoice_items` | One row per invoice line linked to a PO item. | Raw quantity, unit price, and amount facts for three-way matching. |
 | `payments` | One row per payment instruction or attempt for an invoice. | Stores the attempt result without storing invoice-level payment progress. |
 | `sap_activate_project_tasks` | One row per project task or readiness activity. | Phase, workstream, completion, and readiness scoring. |
-| `change_requests` | One row per project change request. | Future scope and requirement change analysis. |
-| `data_quality_issues` | One row per data quality or migration-readiness issue. | Future issue count, resolution, and readiness impact analysis. |
+| `change_requests` | One row per project change request. | Current-state scope, requirement, status, phase, and priority analysis. |
+| `data_quality_issues` | One row per data quality or migration-readiness issue. | Current-state issue resolution, accepted-risk, severity, and readiness analysis. |
 | `vw_po_item_fulfillment` | One row per PO item. | Derived item fulfillment and open quantity. |
 | `vw_po_fulfillment` | One row per PO header. | Derived header fulfillment from active item statuses. |
 | `vw_po_item_delivery_performance` | One row per PO item. | Derived item-level delivery performance. |
 | `vw_invoice_item_three_way_match` | One row per non-cancelled invoice item. | Derived PO-GR-invoice quantity and price matching. |
 | `vw_invoice_matching_summary` | One row per invoice header. | Header-level matching rollup with explicit excluded and invalid states. |
 | `vw_invoice_payment_progress` | One row per invoice header. | Successful-payment rollup, current eligibility, outstanding amount, and derived payment progress. |
+| `vw_change_request_phase_summary` | One row per SAP Activate phase. | Status, open, and high/critical open change-request counts, including zero-request phases. |
+| `vw_project_readiness_summary` | One row for the project snapshot. | Transparent pre-go-live task, change-request, data-quality, rate, and readiness classification outputs. |
 
 ## 8. Analytical Views
 
@@ -362,6 +363,39 @@ New-payment acceptance and historical payment-fact validation are separate conce
 
 Outstanding amount is kept at zero rather than becoming negative in the analytical output. Overpayments remain invalid data and are detected by Python business-rule validation.
 
+### `vw_change_request_phase_summary`
+
+Grain: one row per SAP Activate phase.
+
+The view uses all six Activate phases as its reporting spine, so phases with zero requests remain visible. It derives:
+
+- Total and per-status request counts.
+- `open_request_count` for `submitted`, `under review`, and `approved`.
+- `high_critical_open_request_count` for open high- or critical-priority requests.
+
+Approved requests remain open until implemented. Deferred, rejected, implemented, and cancelled requests are not open.
+
+### `vw_project_readiness_summary`
+
+Grain: one row for the current project snapshot.
+
+The view combines transparent aggregate facts from `sap_activate_project_tasks`, `change_requests`, and `data_quality_issues`. Discover through Deploy tasks are in go-live scope; Run tasks are excluded.
+
+Data-quality rates:
+
+- Resolution Rate = resolved issues / non-cancelled issues.
+- Disposition Rate = (resolved + accepted risk) / non-cancelled issues.
+- Accepted risk is dispositioned but is not resolved.
+- A zero denominator returns null.
+
+Readiness precedence:
+
+1. `not ready`: a critical pre-go-live task is blocked, delayed, or cancelled; or a critical change request is open; or a critical data-quality issue is open/in progress.
+2. `at risk`: no not-ready condition exists, but a critical pre-go-live task is incomplete; a high-priority change request is open; a high-severity data-quality issue is unresolved; or a high/critical issue is accepted risk.
+3. `ready`: none of the preceding conditions exists.
+
+The deterministic Phase 6 result is `not ready` because `TASK-010` is a blocked critical Deploy task and `DQ-004` is an open critical issue. The existing `TASK-011` is excluded because it is stored in the Run phase.
+
 ## 9. Relationship and Design Rationale
 
 The model follows a simplified procure-to-pay analytical flow:
@@ -377,8 +411,10 @@ The model follows a simplified procure-to-pay analytical flow:
 - Three-way matching is derived at invoice-item grain and then rolled up to invoice grain.
 - Payment instruction results are stored at payment grain.
 - Successful payment amounts, outstanding amount, and invoice payment progress are derived at invoice grain.
+- Change requests and data-quality issues remain separate current-state project facts.
+- Go-live readiness is derived from explicit pre-go-live task, change-request, and data-quality blocker rules.
 
-This design keeps delivery reliability, open quantity, document lifecycle, receipt workflow, invoice matching, blocking, payment-attempt result, current eligibility, and invoice payment progress logically separate.
+This design keeps delivery reliability, open quantity, document lifecycle, receipt workflow, invoice matching, blocking, payment-attempt result, current eligibility, invoice payment progress, project changes, data-quality lifecycle, and go-live readiness logically separate.
 
 Phase 4 assumes PO, receipt, and invoice quantities use the material base unit of measure. Unit-of-measure conversion is not implemented. Tax, freight, and business matching tolerances are also outside scope. Generated invoice unit prices use no more than two decimal places. Price comparison uses two-decimal monetary values, and quantity comparison uses floating-point tolerance only.
 
@@ -542,22 +578,30 @@ erDiagram
         string change_request_id PK
         string related_task_id FK
         string activate_phase
+        string change_title
         string change_type
         string status
         string priority
+        date requested_date
+        date decision_date
     }
 
     data_quality_issues {
         string data_quality_issue_id PK
+        string issue_description
         string related_task_id FK
         string affected_entity_type
+        string affected_entity_id
         string issue_category
+        string severity
         string issue_status
+        date detected_date
+        date resolved_date
         decimal readiness_impact_score
     }
 ```
 
-The ERD shows persisted tables only. The derived analytical views are `vw_po_item_fulfillment`, `vw_po_fulfillment`, `vw_po_item_delivery_performance`, `vw_invoice_item_three_way_match`, `vw_invoice_matching_summary`, and `vw_invoice_payment_progress`.
+The ERD shows persisted tables only. The eight derived analytical views are `vw_po_item_fulfillment`, `vw_po_fulfillment`, `vw_po_item_delivery_performance`, `vw_invoice_item_three_way_match`, `vw_invoice_matching_summary`, `vw_invoice_payment_progress`, `vw_change_request_phase_summary`, and `vw_project_readiness_summary`.
 
 ## 11. KPI Group to Source Object Mapping
 
@@ -573,4 +617,4 @@ The ERD shows persisted tables only. The derived analytical views are `vw_po_ite
 | Procurement Operations | Open PO Quantity | `vw_po_item_fulfillment` | Implemented in Phase 3 view logic. |
 | Invoice and Matching | Three-Way Matching Exception Rate and Blocked Invoice Count | `purchase_order_items`, `goods_receipts`, `invoices`, `invoice_items`, `vw_invoice_item_three_way_match`, `vw_invoice_matching_summary` | Implemented in Phase 4 view and validation logic. |
 | Payment Progress | Invoice Payment Completion Rate and Outstanding Invoice Amount by Currency | `invoices`, `payments`, `vw_invoice_matching_summary`, `vw_invoice_payment_progress` | Implemented in Phase 5 view and validation logic. |
-| SAP Activate Readiness | Data readiness and go-live outputs | `sap_activate_project_tasks`, `change_requests`, `data_quality_issues` | Partially modeled; data generation planned for later phases. |
+| SAP Activate Readiness | Change-request risk, Data Quality Resolution Rate, and Go-Live Readiness Classification | `sap_activate_project_tasks`, `change_requests`, `data_quality_issues`, `vw_change_request_phase_summary`, `vw_project_readiness_summary` | Implemented in Phase 6 view and validation logic. |

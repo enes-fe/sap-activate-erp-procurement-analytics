@@ -58,7 +58,7 @@ The current SQLite schema contains these 16 persisted tables:
 - `change_requests`
 - `data_quality_issues`
 
-The current schema also contains six analytical views:
+The current schema also contains eight analytical views:
 
 - `vw_po_item_fulfillment`
 - `vw_po_fulfillment`
@@ -66,6 +66,8 @@ The current schema also contains six analytical views:
 - `vw_invoice_item_three_way_match`
 - `vw_invoice_matching_summary`
 - `vw_invoice_payment_progress`
+- `vw_change_request_phase_summary`
+- `vw_project_readiness_summary`
 
 Current generated row counts:
 
@@ -85,8 +87,10 @@ Current generated row counts:
 | `invoice_items` | 5 |
 | `payments` | 5 |
 | `sap_activate_project_tasks` | 12 |
+| `change_requests` | 6 |
+| `data_quality_issues` | 7 |
 
-The following tables currently exist for later phases but are empty: `change_requests` and `data_quality_issues`.
+The Phase 6 project dataset contains six change requests and seven data-quality issues. These issue records describe legacy migration or UAT findings; the deterministic Phase 1-5 master and transaction facts remain valid and unchanged.
 
 ## 6. Important Architecture Decision
 
@@ -102,6 +106,9 @@ The pre-Phase 3 refactor separated several concepts that should not be compresse
 - Three-way matching: derived by SQL views from PO, invoice, and eligible posted accepted receipt quantities.
 - Payment instruction or attempt result: stored on `payments.payment_status`.
 - Invoice payment progress: derived from successful payment amounts through `vw_invoice_payment_progress`.
+- Change-request lifecycle: stored independently on `change_requests.status`.
+- Data-quality lifecycle: stored independently on `data_quality_issues.issue_status`.
+- Go-live readiness: derived from explicit pre-go-live task, open change-request, and data-quality blocker rules through `vw_project_readiness_summary`.
 
 This keeps document lifecycle, operational receipt workflow, quantity facts, fulfillment progress, invoice matching, blocking, payment-attempt result, current payment eligibility, and invoice payment progress independently understandable. In particular, a posted invoice may be blocked without overloading `invoice_status`, and `partially paid` is derived at invoice grain rather than stored as a payment-event status.
 
@@ -156,21 +163,31 @@ Current deterministic Phase 5 payment results:
 
 Payment amount inherits invoice currency. The model does not duplicate currency on payment rows or combine different currencies in amount KPIs.
 
+Current deterministic Phase 6 readiness results:
+
+- 6 change requests; 3 are open and 2 are both open and high/critical priority.
+- 7 data-quality issues; 6 are non-cancelled, 3 resolved, 1 accepted risk, and 2 unresolved.
+- Unresolved High/Critical Data Quality Issue Count: 2.
+- Data Quality Resolution Rate: 3 / 6 = 50.0%.
+- Data Quality Disposition Rate: 4 / 6 = 66.7%; accepted risk is not counted as resolved.
+- Go-Live Readiness Classification: `not ready`.
+- Permanent hard blockers: critical blocked Deploy task `TASK-010` and critical open issue `DQ-004`.
+
 ## 8. Current Roadmap Status
 
 | Step | Status | Notes |
 | --- | --- | --- |
 | Step 1: Foundation | Completed | Project scope, README, business case, KPI catalog, SAP Activate mapping, and project context exist. |
-| Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and six analytical views. |
-| Step 3: Synthetic data | Phase 1-5 completed | Master data, requisitions, purchase orders, goods receipts, invoices, invoice items, payments, and SAP Activate project tasks are generated. Project-exception tables remain for later phases. |
-| Step 4: SQL analytics | Partially started | Fulfillment, delivery-performance, invoice matching, and payment-progress logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
-| Step 5: Documentation | In progress | Current work aligns documentation with the Phase 5 payment-progress implementation. |
+| Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and eight analytical views. |
+| Step 3: Synthetic data | Phase 1-6 completed | Master, procurement, invoice, payment, SAP Activate task, change-request, and data-quality issue data are generated. |
+| Step 4: SQL analytics | Partially started | Fulfillment, delivery-performance, invoice matching, payment-progress, change-request, and readiness logic exists as schema views and generator validation queries. Separate SQL analysis files are not yet created. |
+| Step 5: Documentation | In progress | Current work aligns documentation with the Phase 6 project-readiness implementation. |
 | Step 6: Dashboard | Not started / optional | Dashboard tools should wait until core SQL outputs are stable. |
 
 Latest completed technical milestone:
 
 ```text
-Phase 5 payment generation and payment-progress analytics
+Phase 6 change requests, data-quality issues, and project-readiness analytics
 ```
 
 ## 9. Current Completed Scope
@@ -195,16 +212,17 @@ Completed:
 - Invoice-level matching summary view.
 - Deterministic payment instruction and attempt generation.
 - Invoice-level payment-progress view.
+- Deterministic change-request and data-quality issue generation.
+- Activate-phase change-request summary view.
+- Project-level readiness summary and transparent readiness classification.
 - Current payment-eligibility derivation.
 - Independent invoice lifecycle and blocking state.
 - Independent payment-event result and invoice payment-progress state.
-- Phase 1 through Phase 5 validations.
+- Phase 1 through Phase 6 validations.
 - Integrity, foreign-key, and deterministic regeneration checks.
 
 Not yet implemented:
 
-- Change request data generation.
-- Data quality issue generation.
 - Separate SQL analytics query files.
 - Dashboard implementation.
 - Final portfolio screenshots.
