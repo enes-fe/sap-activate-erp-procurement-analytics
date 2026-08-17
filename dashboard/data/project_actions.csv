@@ -1,0 +1,10 @@
+action_source,action_id,activate_phase,priority_or_severity,action_status,action_description,hard_blocker_flag
+critical task,TASK-007,realize,critical,in progress,Vendor and material master data build,0
+critical task,TASK-009,deploy,critical,in progress,User acceptance testing for procurement,0
+critical task,TASK-010,deploy,critical,blocked,Key user training and job aids,1
+data quality risk,DQ-004,deploy,critical,open,The UAT invoice extract for INV-004 contains an obsolete PO-item reference that prevents matching.,1
+data quality risk,DQ-001,realize,high,in progress,Legacy vendor extract is missing the withholding-tax classification required for VEN-005 migration.,0
+data quality risk,DQ-005,realize,high,accepted risk,The legacy standard price for MAT-009 differs from the approved target price; the variance was accepted for the initial load and flagged for post-load review.,0
+open change request,CR-002,explore,high,approved,Introduce dual approval for high-value purchase orders,0
+open change request,CR-003,realize,high,under review,Map legacy vendor tax-region codes to target values,0
+open change request,CR-006,deploy,medium,submitted,Add buyer exception-report scenario to UAT,0

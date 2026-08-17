@@ -1,0 +1,7 @@
+phase_sequence,activate_phase,task_count,completed_task_count,average_completion_pct,incomplete_critical_task_count,total_request_count,open_request_count,high_critical_open_request_count,unresolved_dq_issue_count,unresolved_high_critical_dq_issue_count
+1,discover,2,2,100.0,0,0,0,0,0,0
+2,prepare,2,2,100.0,0,1,0,0,0,0
+3,explore,2,2,100.0,0,2,1,1,0,0
+4,realize,2,0,70.0,1,2,1,1,1,1
+5,deploy,2,0,35.0,2,1,1,0,1,1
+6,run,2,0,17.5,1,0,0,0,0,0
