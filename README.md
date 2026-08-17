@@ -12,7 +12,7 @@ Marmara Components, a fictional mid-sized manufacturing and industrial component
 
 The analytics layer is designed to support questions such as:
 
-- Which vendors represent the highest procurement spend?
+- Which vendors represent the highest PO commitment value?
 - Which suppliers deliver complete orders on time?
 - Which purchase orders or purchase order items remain open?
 - Where do delays appear between requisition, purchase order, goods receipt, invoice, and payment?
@@ -24,7 +24,7 @@ The analytics layer is designed to support questions such as:
 - Python 3 for deterministic data generation.
 - Python standard library modules for dates, randomness, paths, argparse, and SQLite access.
 - Faker for realistic synthetic names and master-data details.
-- SQL for schema objects, constraints, validation-ready views, and future query files.
+- SQL for schema objects, constraints, analytical views, and standalone analytics query files.
 - Markdown for project documentation.
 - Git and GitHub for version control and portfolio presentation.
 - Power BI or Tableau as optional future dashboard layers after SQL outputs are stable.
@@ -48,10 +48,11 @@ Completed:
 - Phase 6 deterministic change-request and data-quality issue generation.
 - Activate-phase change-request summary and transparent project-readiness views.
 - Phase 1 through Phase 6 validations, including integrity, foreign-key, deterministic regeneration, lifecycle, fulfillment, delivery KPI, invoice arithmetic, matching, blocking, payment arithmetic, project readiness, and adversarial rollback checks.
+- Phase 7 standalone SQL analytics package covering PO commitment, supplier delivery, open POs, invoice matching, payment progress, and project readiness.
+- Read-only SQL package runner with explicit Seed-42 headline validation for every analysis file.
 
 Not yet implemented:
 
-- Separate SQL analytics query files.
 - Dashboard implementation and final portfolio screenshots.
 - SAP API or SAP Learning Hub integration.
 
@@ -95,6 +96,23 @@ python scripts/generate_data.py --reset
 ```
 
 The generator uses default seed `42`, so the current synthetic dataset is deterministic. It recreates `database/marmara_components.db`, applies the SQLite schema, inserts the synthetic data, and runs integrity, foreign-key, scenario, fulfillment, delivery-performance, invoice, three-way matching, payment-progress, project-readiness, and adversarial rollback checks.
+
+## SQL Analytics Package
+
+The recruiter-readable Phase 7 queries are stored in `sql/`. They expose the
+existing schema and analytical-view logic without creating new persisted tables
+or views. PO monetary analysis is described as PO commitment value, not cash
+spend, and TRY/EUR amounts are always reported separately.
+
+Each analysis file ends with a compact deterministic headline. Validate every
+statement and all six Seed-42 headlines from the repository root:
+
+```bash
+python scripts/validate_sql_queries.py
+```
+
+See `sql/README.md` for reporting scope, business questions, query inventory,
+and expected results.
 
 ## Current Deterministic Dataset Snapshot
 
@@ -190,10 +208,10 @@ The repository uses SAP Activate as a practical project-storytelling structure:
 - Prepare: define scope, stakeholders, KPI priorities, and planned data sources.
 - Explore: map reporting requirements to procurement process and data requirements.
 - Realize: implement schema, deterministic data, analytical views, and validation logic.
-- Deploy: readiness reporting is implemented; final SQL packaging, documentation review, and optional dashboard screenshots remain future work.
+- Deploy: readiness reporting and the validated SQL analytics package are implemented; optional dashboard screenshots and final presentation work remain future-oriented.
 - Run: future recurring monitoring of procurement KPIs and process improvement opportunities.
 
 ## Next Steps
 
-1. Separate SQL analytics query files.
-2. Optional dashboard and final portfolio presentation.
+1. Optional dashboard and final portfolio presentation.
+2. Final repository screenshots and recruiter-facing walkthrough.

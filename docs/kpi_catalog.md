@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This KPI catalog defines the procurement and SAP Activate project KPIs for the SAP Activate ERP Procurement Analytics project. The data model is implemented for the current Phase 6 scope, but not every KPI in this catalog has been implemented as a separate SQL query file yet.
+This KPI catalog defines the procurement and SAP Activate project KPIs for the SAP Activate ERP Procurement Analytics project. The Phase 1-6 data model and analytical views are exposed through the standalone Phase 7 SQL analytics package.
 
-The current repository includes SQLite views and generator validation logic for item fulfillment, delivery performance, invoice three-way matching, invoice payment progress, change requests, data-quality readiness, and go-live readiness classification. Spend and dashboard-ready SQL query packages remain planned work.
+The current repository includes SQLite views and generator validation logic for item fulfillment, delivery performance, invoice three-way matching, invoice payment progress, change requests, data-quality readiness, and go-live readiness classification. Phase 7 adds standalone SQL reporting and explicit Seed-42 headline validation. Dashboard-ready extracts remain future work.
 
 ## KPI Prioritization
 
@@ -12,9 +12,9 @@ Core KPIs are the priority analytics scope for the first complete portfolio vers
 
 ### Core KPIs
 
-- Total Procurement Spend
-- Spend by Vendor
-- Spend by Material Group
+- Total PO Commitment Value
+- PO Commitment by Vendor
+- PO Commitment by Material Group
 - Purchase Order Cycle Time
 - PO Item On-Time In-Full Rate
 - Average Delivery Delay
@@ -49,8 +49,9 @@ Core KPIs are the priority analytics scope for the first complete portfolio vers
 
 ## Current Implementation Status
 
-Implemented through Phase 6:
+Implemented through Phase 7:
 
+- PO Commitment Value by Currency, Vendor, and Material Group.
 - PO Item On-Time In-Full Rate.
 - Receipt Event On-Time Rate.
 - Average Delivery Delay across late receipt events.
@@ -68,10 +69,10 @@ Implemented through Phase 6:
 - Unresolved High/Critical Data Quality Issue Count.
 - Data Quality Resolution Rate and supporting disposition rate.
 - Go-Live Readiness Classification.
+- Standalone query outputs and deterministic Seed-42 headline validation.
 
 Planned:
 
-- Separate spend query files.
 - Dashboard-ready output tables or extracts.
 
 ## Primary Delivery KPI: PO Item On-Time In-Full Rate
@@ -236,22 +237,22 @@ Expected result: `not ready`, caused independently by blocked critical Deploy ta
 
 | KPI Name | Priority | Category | Business Question | Calculation Logic in Plain English | Expected Source Objects | Current Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Total Procurement Spend | Core | Procurement Spend | What is the total value of procurement activity? | Add the net value of all relevant purchase order items within the selected period. | `purchase_orders`, `purchase_order_items` | Planned query file. |
-| Spend by Vendor | Core | Procurement Spend | Which vendors receive the highest spend? | Group purchase order item values by vendor and rank vendors by total spend. | `vendors`, `purchase_orders`, `purchase_order_items` | Planned query file. |
-| Spend by Material Group | Core | Procurement Spend | Which material groups drive the largest procurement cost? | Group purchase order item values by material group and compare total spend across groups. | `materials`, `material_groups`, `purchase_order_items` | Planned query file. |
+| Total PO Commitment Value | Core | Procurement Commitment | What is the value committed through relevant purchase orders? | Add the net value of non-cancelled purchase order items within the selected period and report each currency separately. This is not cash spend. | `purchase_orders`, `purchase_order_items` | Implemented in `sql/01_procurement_spend.sql`. |
+| PO Commitment by Vendor | Core | Procurement Commitment | Which vendors receive the highest PO commitment? | Group purchase order item values by vendor and currency, then rank suppliers within currency. | `vendors`, `purchase_orders`, `purchase_order_items` | Implemented in `sql/01_procurement_spend.sql`. |
+| PO Commitment by Material Group | Core | Procurement Commitment | Which material groups drive the largest PO commitment? | Group purchase order item values by material group and currency, then compare commitment within currency. | `materials`, `material_groups`, `purchase_order_items` | Implemented in `sql/01_procurement_spend.sql`. |
 | Purchase Order Volume | Extended | Procurement Operations | How many purchase orders are created in a selected period? | Count purchase orders created within the selected date range. | `purchase_orders` | Planned. |
 | Purchase Order Cycle Time | Core | Procurement Efficiency | How long does it take to process a purchase order? | Measure days between requisition creation or approval and purchase order creation or approval where conversion links exist. | `purchase_requisitions`, `purchase_requisition_items`, `purchase_orders`, `purchase_order_items` | Planned query file. |
 | Requisition to Purchase Order Conversion Time | Extended | Procurement Efficiency | How quickly are approved requisitions converted into purchase orders? | Measure days between requisition approval and purchase order creation. | `purchase_requisitions`, `purchase_requisition_items`, `purchase_orders`, `purchase_order_items` | Planned. |
-| PO Item On-Time In-Full Rate | Core | Supplier Performance | What percentage of due active PO items were fully fulfilled with accepted quantity on or before the planned delivery date? | Count due active PO items where cumulative posted accepted quantity reaches ordered quantity on or before the planned date, then divide by due active PO items. | `purchase_orders`, `purchase_order_items`, `goods_receipts`, `vw_po_item_fulfillment`, `vw_po_item_delivery_performance`, `vendors` | Implemented in Phase 3 validation logic. |
-| Receipt Event On-Time Rate | Extended | Supplier Performance | What percentage of receipt events were posted on or before the planned delivery date? | Count posted receipt events on or before planned delivery date and divide by relevant posted receipt events. | `goods_receipts`, `purchase_order_items`, `purchase_orders`, `vendors` | Implemented in Phase 3 validation logic. |
-| Late Delivery Rate | Extended | Supplier Performance | Which suppliers or material groups are frequently late? | Count late PO items or late receipt events and divide by the relevant denominator selected for the report. | `vw_po_item_delivery_performance`, `goods_receipts`, `purchase_order_items`, `vendors`, `materials` | Planned supplier-level reporting. |
-| Average Delivery Delay | Core | Supplier Performance | When deliveries are late, how many calendar days late are they on average? | For late receipt events, calculate the average calendar-day difference between planned delivery date and receipt date. Future reports may group this by vendor. | `goods_receipts`, `purchase_order_items`, `vendors` | Implemented in Phase 3 validation logic. |
-| Open Purchase Order Count | Core | Procurement Operations | How many purchase orders or PO items remain open? | Count active PO headers or items with derived open or partial fulfillment. | `vw_po_fulfillment`, `vw_po_item_fulfillment`, `purchase_orders`, `purchase_order_items` | Partially implemented through views. |
+| PO Item On-Time In-Full Rate | Core | Supplier Performance | What percentage of due active PO items were fully fulfilled with accepted quantity on or before the planned delivery date? | Count due active PO items where cumulative posted accepted quantity reaches ordered quantity on or before the planned date, then divide by due active PO items. | `purchase_orders`, `purchase_order_items`, `goods_receipts`, `vw_po_item_fulfillment`, `vw_po_item_delivery_performance`, `vendors` | Implemented through the Phase 3 view/validation and `sql/02_supplier_delivery_performance.sql`. |
+| Receipt Event On-Time Rate | Extended | Supplier Performance | What percentage of receipt events were posted on or before the planned delivery date? | Count posted receipt events on or before planned delivery date and divide by relevant posted receipt events. | `goods_receipts`, `purchase_order_items`, `purchase_orders`, `vendors` | Implemented through Phase 3 validation and `sql/02_supplier_delivery_performance.sql`. |
+| Late Delivery Rate | Extended | Supplier Performance | Which suppliers or material groups are frequently late? | Count late PO items or late receipt events and divide by the relevant denominator selected for the report. | `vw_po_item_delivery_performance`, `goods_receipts`, `purchase_order_items`, `vendors`, `materials` | Implemented at supplier level in `sql/02_supplier_delivery_performance.sql`. |
+| Average Delivery Delay | Core | Supplier Performance | When deliveries are late, how many calendar days late are they on average? | For late receipt events, calculate the average calendar-day difference between planned delivery date and receipt date. | `goods_receipts`, `purchase_order_items`, `vendors` | Implemented through Phase 3 validation and `sql/02_supplier_delivery_performance.sql`. |
+| Open Purchase Order Count | Core | Procurement Operations | How many purchase orders or PO items remain open? | Count active PO headers or items with derived open or partial fulfillment. | `vw_po_fulfillment`, `vw_po_item_fulfillment`, `purchase_orders`, `purchase_order_items` | Implemented through the fulfillment views and `sql/03_open_po_analysis.sql`. |
 | Open PO Quantity | Core | Procurement Operations | How much ordered quantity remains unfulfilled? | Calculate `MAX(ordered quantity - effective posted accepted quantity, 0)` at item level. Rejected and under-review quantities do not close the PO item. | `vw_po_item_fulfillment` | Implemented in Phase 3 view logic. |
-| Goods Receipt vs Invoice Mismatch Rate | Core | Invoice and Matching | How often do invoice records differ from goods receipt or purchase order expectations? | Count non-cancelled invoice items whose derived matching status is not matched, then divide by non-cancelled invoice items. Eligible receipt quantity uses posted accepted quantity as of invoice receipt. | `vw_invoice_item_three_way_match`, `purchase_order_items`, `goods_receipts`, `invoices`, `invoice_items` | Implemented in Phase 4 view and validation logic. |
-| Blocked Invoice Count | Core | Invoice and Matching | How many eligible invoices are blocked for payment release or review? | Count invoice headers where `blocked_flag = 1` and summary status is `matched` or `exception`. Cancelled and invalid zero-item headers are excluded. | `invoices`, `vw_invoice_matching_summary`, `vendors` | Implemented in Phase 4 validation logic. |
-| Invoice Payment Completion Rate | Core | Payment Progress | What percentage of valid posted or approved invoices have been fully paid? | Count invoices with derived payment progress `paid` and divide by valid posted or approved non-cancelled invoices. Blocked invoices remain in the denominator. | `invoices`, `payments`, `vw_invoice_payment_progress` | Implemented in Phase 5 view and validation logic. |
-| Outstanding Invoice Amount by Currency | Core | Payment Progress | How much valid invoice value remains unpaid in each currency? | Sum derived outstanding amount for valid invoices and group by invoice currency. Never aggregate different currencies together. | `invoices`, `payments`, `vw_invoice_payment_progress` | Implemented in Phase 5 view and validation logic. |
+| Goods Receipt vs Invoice Mismatch Rate | Core | Invoice and Matching | How often do invoice records differ from goods receipt or purchase order expectations? | Count non-cancelled invoice items whose derived matching status is not matched, then divide by non-cancelled invoice items. Eligible receipt quantity uses posted accepted quantity as of invoice receipt. | `vw_invoice_item_three_way_match`, `purchase_order_items`, `goods_receipts`, `invoices`, `invoice_items` | Implemented through the Phase 4 view/validation and `sql/04_invoice_matching_analysis.sql`. |
+| Blocked Invoice Count | Core | Invoice and Matching | How many eligible invoices are blocked for payment release or review? | Count invoice headers where `blocked_flag = 1` and summary status is `matched` or `exception`. Cancelled and invalid zero-item headers are excluded. | `invoices`, `vw_invoice_matching_summary`, `vendors` | Implemented through Phase 4 validation and `sql/04_invoice_matching_analysis.sql`. |
+| Invoice Payment Completion Rate | Core | Payment Progress | What percentage of valid posted or approved invoices have been fully paid? | Count invoices with derived payment progress `paid` and divide by valid posted or approved non-cancelled invoices. Blocked invoices remain in the denominator. | `invoices`, `payments`, `vw_invoice_payment_progress` | Implemented through the Phase 5 view/validation and `sql/05_payment_progress_analysis.sql`. |
+| Outstanding Invoice Amount by Currency | Core | Payment Progress | How much valid invoice value remains unpaid in each currency? | Sum derived outstanding amount for valid invoices and group by invoice currency. Never aggregate different currencies together. | `invoices`, `payments`, `vw_invoice_payment_progress` | Implemented through the Phase 5 view/validation and `sql/05_payment_progress_analysis.sql`. |
 | Average Invoice Processing Time | Extended | Invoice and Matching | How long does it take to process supplier invoices? | Measure days between invoice receipt and posting or payment release. | `invoices`, `payments` | Planned. |
 | Maverick Buying Indicator | Extended | Procurement Compliance | Are purchases happening outside expected procurement channels or preferred suppliers? | Flag purchases that do not reference preferred vendors, expected purchasing groups, or standard material categories. | `vendors`, `materials`, `purchase_orders`, `purchase_order_items`, `purchasing_groups` | Planned. |
 | Supplier Reliability Score | Extended | Supplier Performance | Which suppliers are most reliable overall? | Combine item OTIF, delay severity, mismatch frequency, blocked invoice count, and fulfillment consistency into a weighted score. | `vendors`, `purchase_orders`, `purchase_order_items`, `goods_receipts`, `invoices` | Planned composite metric. |
@@ -259,7 +260,7 @@ Expected result: `not ready`, caused independently by blocked critical Deploy ta
 | Unresolved High/Critical Data Quality Issue Count | Core | Data Readiness | How many material data risks remain unresolved? | Count open or in-progress issues whose severity is high or critical; accepted risk is reported separately. | `data_quality_issues`, `vw_project_readiness_summary` | Implemented in Phase 6 view and validation logic. |
 | Data Quality Resolution Rate | Core | Data Readiness | What share of non-cancelled issues has been fixed? | Divide resolved issues by non-cancelled issues. Accepted risk remains in the denominator but not the numerator; return null for a zero denominator. | `data_quality_issues`, `vw_project_readiness_summary` | Implemented in Phase 6 view and validation logic. |
 | Go-Live Readiness Classification | Core | SAP Activate Project | Is the procurement workstream ready for go-live? | Apply explicit not-ready, at-risk, and ready precedence to pre-go-live critical tasks, open high/critical requests, unresolved high/critical issues, and accepted high/critical risks. | `sap_activate_project_tasks`, `change_requests`, `data_quality_issues`, `vw_project_readiness_summary` | Implemented in Phase 6 view and validation logic. |
-| Project Task Completion Rate | Extended | SAP Activate Project | Is the implementation progressing according to plan? | Divide completed project tasks by total planned project tasks, optionally grouped by SAP Activate phase. | `sap_activate_project_tasks` | Data generated; separate query file planned. |
+| Project Task Completion Rate | Extended | SAP Activate Project | Is the implementation progressing according to plan? | Divide completed project tasks by total planned project tasks, optionally grouped by SAP Activate phase. | `sap_activate_project_tasks` | Implemented at phase level in `sql/06_project_readiness_analysis.sql`. |
 | Open Change Request Count | Extended | SAP Activate Project | How many submitted, under-review, or approved requests remain unimplemented? | Count submitted, under-review, and approved requests. Deferred, rejected, implemented, and cancelled requests are not open. | `change_requests`, `vw_change_request_phase_summary`, `vw_project_readiness_summary` | Implemented in Phase 6 view and validation logic. |
 | High/Critical Open Change Request Count | Extended | SAP Activate Project | How many open requests require elevated management attention? | Count open requests whose priority is high or critical. | `change_requests`, `vw_change_request_phase_summary`, `vw_project_readiness_summary` | Implemented in Phase 6 view and validation logic. |
 
@@ -272,6 +273,13 @@ The current synthetic dataset validates these Phase 3 delivery-performance resul
 - Average late-event delay: 2.2 calendar days.
 
 These values validate the deterministic synthetic scenario. They are not target benchmarks for a real procurement organization.
+
+The Phase 7 PO commitment and open-PO queries validate:
+
+- Non-cancelled PO commitment: TRY 7,216.64 and EUR 4,269.30.
+- Non-cancelled scope: 7 PO headers and 14 PO items.
+- Active open/partial scope: 4 PO headers and 5 PO items.
+- Remaining PO commitment: TRY 1,118.82 and EUR 2,245.80.
 
 The Phase 4 deterministic invoice dataset validates:
 
@@ -312,4 +320,4 @@ The Phase 6 deterministic project-readiness dataset validates:
 - Payment progress is derived from successful payment events and is not stored on invoices or individual payment rows.
 - Change-request status, data-quality issue status, and task status remain separate concepts.
 - Accepted risk is not resolved. It contributes to the supporting disposition rate and to at-risk readiness when severity is high or critical.
-- Future SQL query files should use the current schema and views as source objects rather than duplicating fulfillment, matching, payment-progress, or readiness logic.
+- Phase 7 SQL query files use the current schema and views as source objects rather than duplicating fulfillment, matching, payment-progress, or readiness logic.
