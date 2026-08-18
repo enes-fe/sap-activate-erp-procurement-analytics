@@ -35,7 +35,7 @@ Implemented stack:
 - SQL is used for the schema, constraints, analytical views, and the standalone Phase 7 analytics package.
 - Markdown is used for documentation.
 - Git and GitHub are used for version control and portfolio presentation.
-- Power BI or Tableau remain optional future dashboard layers.
+- Power BI delivery includes six deterministic dashboard-ready CSV extracts, a completed three-page report, real page screenshots, and an optional downloadable PBIX artifact.
 
 ## 5. Actual Data Model
 
@@ -181,13 +181,13 @@ Current deterministic Phase 6 readiness results:
 | Step 2: Data model | Completed for current scope | The executable SQLite schema contains the 16-table model and eight analytical views. |
 | Step 3: Synthetic data | Phase 1-6 completed | Master, procurement, invoice, payment, SAP Activate task, change-request, and data-quality issue data are generated. |
 | Step 4: SQL analytics | Completed for current scope | Six standalone analyses expose PO commitment, delivery, open-PO, invoice, payment, and readiness logic; every file has a deterministic Seed-42 headline validated by a read-only runner. |
-| Step 5: Documentation | Current through Phase 7 | Repository documentation describes the SQL package, reporting rules, expected headlines, and validation workflow. |
-| Step 6: Dashboard | Not started / optional | Dashboard tools should wait until core SQL outputs are stable. |
+| Step 5: Documentation | Completed through Phase 8 | Repository documentation describes the SQL package, reporting rules, dashboard data model, expected headlines, validation workflow, and completed portfolio presentation. |
+| Step 6: Dashboard | Completed | Six deterministic Power BI-ready CSV extracts, the three-page Power BI report, an optional downloadable PBIX, and real screenshots are included. |
 
 Latest completed technical milestone:
 
 ```text
-Phase 7 standalone SQL analytics package and deterministic headline validation
+Phase 8 completed Power BI dashboard and recruiter-facing portfolio presentation
 ```
 
 ## 9. Current Completed Scope
@@ -217,6 +217,11 @@ Completed:
 - Project-level readiness summary and transparent readiness classification.
 - Six recruiter-readable standalone SQL analysis files.
 - Read-only SQL runner with explicit Seed-42 headline expectations.
+- Read-only dashboard export script with atomic CSV replacement.
+- Six deterministic Power BI-ready CSV datasets with validated grains and currency-safe monetary fields.
+- Power BI relationship, visual, slicer, and minimal-DAX guidance.
+- Completed three-page Power BI dashboard for procurement, invoice/payment, and SAP project-readiness reporting.
+- Three real dashboard page screenshots and an optional downloadable PBIX artifact.
 - Current payment-eligibility derivation.
 - Independent invoice lifecycle and blocking state.
 - Independent payment-event result and invoice payment-progress state.
@@ -225,8 +230,6 @@ Completed:
 
 Not yet implemented:
 
-- Dashboard implementation.
-- Final portfolio screenshots.
 - SAP API or SAP Learning Hub integration.
 
 Phase 4 matching assumes invoice and PO quantities use the material base unit of measure. Unit-of-measure conversion, tax, freight, and business matching tolerances are not modeled. Generated invoice unit prices use no more than two decimal places. Price equality uses two-decimal monetary comparison, while quantity comparisons use numeric floating-point tolerance.
@@ -261,6 +264,7 @@ sap-activate-erp-procurement-analytics/
 |-- scripts/
 |   |-- generate_data.py
 |   |-- validate_sql_queries.py
+|   |-- export_dashboard_data.py
 |
 |-- sql/
 |   |-- README.md
@@ -271,9 +275,23 @@ sap-activate-erp-procurement-analytics/
 |   |-- 05_payment_progress_analysis.sql
 |   |-- 06_project_readiness_analysis.sql
 |
+|-- dashboard/
+|   |-- README.md
+|   |-- sap_activate_procurement_analytics.pbix
+|   |-- data/
+|   |   |-- procurement_items.csv
+|   |   |-- invoice_matching.csv
+|   |   |-- payment_progress.csv
+|   |   |-- project_readiness.csv
+|   |   |-- project_phases.csv
+|   |   |-- project_actions.csv
+|   |-- screenshots/
+|   |   |-- procurement_overview.png
+|   |   |-- invoice_payment.png
+|   |   |-- sap_project_readiness.png
+|
 |-- README.md
 |-- PROJECT_CONTEXT.md
+|-- .gitattributes
 |-- .gitignore
 ```
-
-Additional folders such as `sql/` or `dashboard/` may be added later when those phases are implemented.

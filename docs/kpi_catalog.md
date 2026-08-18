@@ -4,7 +4,7 @@
 
 This KPI catalog defines the procurement and SAP Activate project KPIs for the SAP Activate ERP Procurement Analytics project. The Phase 1-6 data model and analytical views are exposed through the standalone Phase 7 SQL analytics package.
 
-The current repository includes SQLite views and generator validation logic for item fulfillment, delivery performance, invoice three-way matching, invoice payment progress, change requests, data-quality readiness, and go-live readiness classification. Phase 7 adds standalone SQL reporting and explicit Seed-42 headline validation. Dashboard-ready extracts remain future work.
+The current repository includes SQLite views and generator validation logic for item fulfillment, delivery performance, invoice three-way matching, invoice payment progress, change requests, data-quality readiness, and go-live readiness classification. Phase 7 adds standalone SQL reporting and explicit Seed-42 headline validation. Phase 8 adds six deterministic, validation-backed dashboard-ready CSV extracts and a completed three-page Power BI report without changing the underlying KPI logic.
 
 ## KPI Prioritization
 
@@ -49,7 +49,7 @@ Core KPIs are the priority analytics scope for the first complete portfolio vers
 
 ## Current Implementation Status
 
-Implemented through Phase 7:
+Implemented through Phase 8:
 
 - PO Commitment Value by Currency, Vendor, and Material Group.
 - PO Item On-Time In-Full Rate.
@@ -70,10 +70,9 @@ Implemented through Phase 7:
 - Data Quality Resolution Rate and supporting disposition rate.
 - Go-Live Readiness Classification.
 - Standalone query outputs and deterministic Seed-42 headline validation.
-
-Planned:
-
-- Dashboard-ready output tables or extracts.
+- Read-only dashboard export layer with fixed-grain procurement, invoice, payment, project-summary, phase, and management-action datasets.
+- Currency-safe, deterministic CSV outputs for Power BI import.
+- Completed three-page Power BI dashboard with real portfolio screenshots.
 
 ## Primary Delivery KPI: PO Item On-Time In-Full Rate
 

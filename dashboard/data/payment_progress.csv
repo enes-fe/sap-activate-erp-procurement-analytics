@@ -1,0 +1,5 @@
+invoice_id,invoice_number,invoice_date,invoice_received_date,posting_date,vendor_id,vendor_name,invoice_currency,invoice_total_amount,invoice_status,blocked_flag,block_reason,invoice_matching_status,eligible_for_payment_flag,successful_paid_amount,outstanding_amount,payment_progress_status,fully_paid_flag,successful_payment_count,latest_successful_payment_date,valid_payment_kpi_flag
+INV-001,ANM-2026-001,2026-02-28,2026-03-01,2026-03-02,VEN-001,Anadolu Metal Sanayi A.S.,TRY,2770.20,posted,0,,matched,0,2770.20,0.00,paid,1,2,2026-03-20,1
+INV-002,BTB-2026-001,2026-02-27,2026-02-28,2026-03-01,VEN-004,Bursa Teknik Bakim Ltd.,TRY,534.60,posted,1,price mismatch,exception,0,0.00,534.60,unpaid,0,0,,1
+INV-003,EPK-2026-001,2026-03-01,2026-03-02,2026-03-03,VEN-003,Ege Packaging A.S.,TRY,744.40,posted,1,quantity exceeds eligible posted accepted quantity,exception,0,0.00,744.40,unpaid,0,0,,1
+INV-004,RSH-2026-001,2026-03-08,2026-03-09,2026-03-09,VEN-002,Ruhr Stahlhandel GmbH,EUR,597.00,posted,1,missing eligible posted goods receipt,exception,0,0.00,597.00,unpaid,0,0,,1
