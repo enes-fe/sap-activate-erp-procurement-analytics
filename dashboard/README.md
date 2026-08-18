@@ -1,9 +1,9 @@
-# Phase 8A Dashboard Data Layer
+# Phase 8 Power BI Dashboard
 
-This directory contains the deterministic CSV import layer for a three-page
-Power BI report. The report, PBIX file, and screenshots are intentionally not
-included in Phase 8A; they will be created manually after the data model and
-visuals are reviewed in Power BI Desktop.
+This directory documents the completed three-page Power BI dashboard and its
+deterministic CSV import layer. Procurement Overview, Invoice & Payment, and
+SAP Project Readiness are implemented, with the real report screenshots and
+an optional downloadable PBIX artifact included in the repository.
 
 ## Refresh the Data
 
@@ -236,22 +236,22 @@ Seed-42 contains nine management actions and two hard blockers: `TASK-010`
 and `DQ-004`. `hard_blocker_flag` is a record-level presentation mapping of the
 existing readiness gates; it is not an alternative readiness classification.
 
-## Screenshots and PBIX
+## Dashboard Artifacts
 
-`dashboard/screenshots/` is intentionally empty during Phase 8A. After the
-Power BI report is manually built and reviewed, export one real 16:9 PNG for
-each page using these filenames:
+The three implemented Power BI pages are captured in:
 
-- `procurement_overview.png`
-- `invoice_payment.png`
-- `project_readiness.png`
+- [Procurement Overview](screenshots/procurement_overview.png)
+- [Invoice & Payment](screenshots/invoice_payment.png)
+- [SAP Project Readiness](screenshots/sap_project_readiness.png)
 
-Do not add placeholder images. A PBIX may be considered later after file size,
-portable data-source configuration, and credential safety are reviewed.
+The completed report is also available as an optional
+[downloadable Power BI artifact](sap_activate_procurement_analytics.pbix).
+The PBIX is a convenience portfolio deliverable; the deterministic CSV exports
+and this guide remain the reproducible documentation of its data model.
 
 ## Validation
 
-Run the complete Phase 8A validation sequence from the repository root:
+Run the complete Phase 8 validation sequence from the repository root:
 
 ```powershell
 python scripts/generate_data.py --reset
